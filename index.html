@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>LectorIA</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: system-ui, sans-serif; background: #f5f5f0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1rem; }
@@ -18,7 +19,9 @@
     .reading { font-size: 20px; line-height: 2; color: #111; }
     .word { display: inline; border-radius: 4px; padding: 1px 2px; transition: all 0.15s; }
     .word.done { color: #9ca3af; }
-    .word.error { background: #fee2e2; color: #991b1b; padding: 1px 4px; }
+    .word.omision { background: #fee2e2; color: #991b1b; padding: 1px 4px; }
+    .word.sustitucion { background: #fef9c3; color: #854d0e; padding: 1px 4px; }
+    .word.repeticion { background: #ede9fe; color: #5b21b6; padding: 1px 4px; }
     .prog-wrap { background: #f3f4f6; border-radius: 8px; height: 8px; margin-bottom: 4px; overflow: hidden; }
     .prog-fill { height: 100%; border-radius: 8px; background: #10b981; transition: width 0.3s; }
     .prog-label { font-size: 11px; color: #9ca3af; text-align: right; margin-bottom: 1rem; }
@@ -35,29 +38,49 @@
     .result { background: #f0fdf4; border: 1px solid #86efac; border-radius: 14px; padding: 1.25rem; margin-top: 1rem; display: none; }
     .result.show { display: block; }
     .result-title { font-size: 15px; font-weight: 600; color: #166534; margin-bottom: 0.75rem; }
-    .result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 1rem; }
     .result-item { background: white; border-radius: 8px; padding: 10px; text-align: center; }
     .result-n { font-size: 22px; font-weight: 600; color: #166534; }
     .result-l { font-size: 10px; color: #4ade80; }
+    .errores-detalle { background: white; border-radius: 10px; padding: 1rem; margin-top: 0.5rem; }
+    .errores-titulo { font-size: 13px; font-weight: 600; color: #166534; margin-bottom: 0.5rem; }
+    .error-fila { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 1px solid #f0fdf4; font-size: 12px; }
+    .error-fila:last-child { border-bottom: none; }
+    .tag { font-size: 10px; padding: 2px 8px; border-radius: 20px; font-weight: 500; }
+    .tag-omision { background: #fee2e2; color: #991b1b; }
+    .tag-sustitucion { background: #fef9c3; color: #854d0e; }
+    .tag-repeticion { background: #ede9fe; color: #5b21b6; }
+    .leyenda { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 0.75rem; font-size: 11px; }
+    .leyenda-item { display: flex; align-items: center; gap: 4px; }
+    .leyenda-dot { width: 10px; height: 10px; border-radius: 2px; }
     .api-box { background: #fefce8; border: 1px solid #fde047; border-radius: 12px; padding: 1rem; margin-bottom: 1rem; }
     .api-box input { width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid #e5e7eb; font-size: 13px; margin-top: 6px; }
     .api-box label { font-size: 12px; color: #854d0e; font-weight: 500; }
+    .alumno-box { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 12px; padding: 1rem; margin-bottom: 1rem; }
+    .alumno-box input { width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid #e5e7eb; font-size: 13px; margin-top: 6px; }
+    .alumno-box label { font-size: 12px; color: #0369a1; font-weight: 500; }
+    .guardado { font-size: 12px; color: #10b981; text-align: center; margin-top: 8px; display: none; }
   </style>
 </head>
 <body>
 <div class="screen">
 
   <div class="api-box">
-    <label>🔑 Tu API key de OpenAI</label>
+    <label>🔑 API key de OpenAI</label>
     <input type="password" id="apikey" placeholder="sk-..." />
+  </div>
+
+  <div class="alumno-box">
+    <label>👤 Nombre del alumno</label>
+    <input type="text" id="alumno" placeholder="Ej: Alejandro López" />
   </div>
 
   <div class="top">
     <div style="display:flex;align-items:center;gap:10px;">
       <div class="avatar">AL</div>
       <div>
-        <div style="font-size:13px;font-weight:600;">¡Hola, Alejandro!</div>
-        <div style="font-size:11px;color:#9ca3af;">Sesión 25</div>
+        <div style="font-size:13px;font-weight:600;">¡Hola!</div>
+        <div style="font-size:11px;color:#9ca3af;">Sesión de lectura</div>
       </div>
     </div>
     <span class="level">Nivel 2B</span>
@@ -68,6 +91,11 @@
 
   <div class="text-card">
     <div class="text-meta">Las abejas — Ciencias Naturales · 40 palabras</div>
+    <div class="leyenda">
+      <div class="leyenda-item"><div class="leyenda-dot" style="background:#fca5a5"></div><span>Omisión</span></div>
+      <div class="leyenda-item"><div class="leyenda-dot" style="background:#fde68a"></div><span>Sustitución</span></div>
+      <div class="leyenda-item"><div class="leyenda-dot" style="background:#ddd6fe"></div><span>Repetición</span></div>
+    </div>
     <div class="reading" id="texto"></div>
   </div>
 
@@ -83,15 +111,26 @@
   <button class="btn idle" id="btn" onclick="toggleLectura()">🎤 Pulsa para leer</button>
 
   <div class="result" id="result">
-    <div class="result-title">🌟 ¡Muy bien, Alejandro!</div>
+    <div class="result-title">🌟 ¡Muy bien!</div>
     <div class="result-grid">
-      <div class="result-item"><div class="result-n" id="r-ppm">—</div><div class="result-l">palabras por minuto</div></div>
+      <div class="result-item"><div class="result-n" id="r-ppm">—</div><div class="result-l">palabras/min</div></div>
       <div class="result-item"><div class="result-n" id="r-prec">—</div><div class="result-l">precisión</div></div>
+      <div class="result-item"><div class="result-n" id="r-omisiones">0</div><div class="result-l">omisiones</div></div>
+      <div class="result-item"><div class="result-n" id="r-sustituciones">0</div><div class="result-l">sustituciones</div></div>
     </div>
+    <div class="errores-detalle" id="detalle-errores" style="display:none">
+      <div class="errores-titulo">Detalle de errores</div>
+      <div id="lista-errores"></div>
+    </div>
+    <div class="guardado" id="guardado">✓ Sesión guardada correctamente</div>
   </div>
 </div>
 
 <script>
+const SUPABASE_URL = "https://mvwuyxrlkyikfgxzokxv.supabase.co";
+const SUPABASE_KEY = "sb_publishable_SNSZe5l2R3jcxiHxcxEqgg_XBrW-Xvi";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
 const textOriginal = "Las abejas son insectos que viven en colonias. Dentro de la colmena trabajan juntas para producir miel. La abeja reina pone huevos y las obreras cuidan la colmena. Recogen el néctar de las flores y lo transforman en miel.";
 const palabras = textOriginal.split(" ");
 
@@ -106,7 +145,7 @@ palabras.forEach((p, i) => {
 
 let grabando = false;
 let mediaRecorder, audioChunks = [];
-let timer, segundos = 0, errores = 0;
+let timer, segundos = 0;
 let inicio;
 
 function toggleLectura() {
@@ -116,13 +155,13 @@ function toggleLectura() {
 async function iniciar() {
   const apikey = document.getElementById("apikey").value.trim();
   if (!apikey) { alert("Introduce tu API key de OpenAI primero"); return; }
-
+  const alumno = document.getElementById("alumno").value.trim();
+  if (!alumno) { alert("Introduce el nombre del alumno primero"); return; }
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
   mediaRecorder = new MediaRecorder(stream);
   audioChunks = [];
   mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
   mediaRecorder.start();
-
   grabando = true;
   inicio = Date.now();
   const btn = document.getElementById("btn");
@@ -130,7 +169,6 @@ async function iniciar() {
   btn.textContent = "⏹ Leyendo... pulsa para terminar";
   document.getElementById("mascot").textContent = "🎤";
   document.getElementById("msg").textContent = "¡Te escucho! Sigue leyendo...";
-
   timer = setInterval(() => {
     segundos = Math.round((Date.now() - inicio) / 1000);
     document.getElementById("tiempo").textContent = segundos + "s";
@@ -141,7 +179,6 @@ async function parar() {
   grabando = false;
   clearInterval(timer);
   mediaRecorder.stop();
-
   document.getElementById("btn").className = "btn finished";
   document.getElementById("btn").textContent = "⏳ Analizando...";
   document.getElementById("btn").disabled = true;
@@ -154,55 +191,131 @@ async function parar() {
     formData.append("file", blob, "lectura.webm");
     formData.append("model", "whisper-1");
     formData.append("language", "es");
-
     const apikey = document.getElementById("apikey").value.trim();
     const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
       method: "POST",
       headers: { "Authorization": "Bearer " + apikey },
       body: formData
     });
-
     const data = await res.json();
-    const transcripcion = data.text || "";
-    procesarResultado(transcripcion);
+    procesarResultado(data.text || "");
   };
 }
 
 function normalizar(str) {
-  return str.toLowerCase().replace(/[.,;:!?¡¿]/g, "").trim();
+  return str.toLowerCase()
+    .replace(/[.,;:!?¡¿]/g, "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .trim();
 }
 
-function procesarResultado(transcripcion) {
-  const leidas = transcripcion.split(" ").map(normalizar).filter(w => w.length > 0);
-  errores = 0;
-  let coincidencias = 0;
+function similitud(a, b) {
+  a = normalizar(a); b = normalizar(b);
+  if (a === b) return 1;
+  if (a.includes(b) || b.includes(a)) return 0.85;
+  const maxLen = Math.max(a.length, b.length);
+  if (maxLen === 0) return 1;
+  let diff = 0;
+  for (let i = 0; i < Math.min(a.length, b.length); i++) {
+    if (a[i] !== b[i]) diff++;
+  }
+  diff += Math.abs(a.length - b.length);
+  return 1 - (diff / maxLen);
+}
+
+function detectarRepeticiones(leidas) {
+  const repetidas = new Set();
+  for (let i = 1; i < leidas.length; i++) {
+    if (normalizar(leidas[i]) === normalizar(leidas[i - 1])) {
+      repetidas.add(normalizar(leidas[i]));
+    }
+  }
+  return repetidas;
+}
+
+async function procesarResultado(transcripcion) {
+  const leidas = transcripcion.split(/\s+/).filter(w => w.length > 0);
+  const repetidas = detectarRepeticiones(leidas);
+  const erroresDetalle = [];
+  let omisiones = 0, sustituciones = 0, reps = 0, totalErrores = 0, coincidencias = 0;
+  let idxLeida = 0;
 
   palabras.forEach((p, i) => {
     const orig = normalizar(p);
     const span = document.getElementById("w" + i);
-    if (leidas.includes(orig)) {
-      span.className = "word done";
-      coincidencias++;
+    let mejorScore = 0, mejorIdx = idxLeida, mejorPalabra = "";
+
+    for (let j = idxLeida; j < Math.min(idxLeida + 5, leidas.length); j++) {
+      const score = similitud(orig, leidas[j]);
+      if (score > mejorScore) { mejorScore = score; mejorIdx = j; mejorPalabra = leidas[j]; }
+    }
+
+    if (mejorScore >= 0.75) {
+      if (repetidas.has(normalizar(mejorPalabra))) {
+        span.className = "word repeticion";
+        erroresDetalle.push({ tipo: "repeticion", original: p, leida: mejorPalabra });
+        reps++; totalErrores++;
+      } else {
+        span.className = "word done";
+        coincidencias++;
+      }
+      idxLeida = mejorIdx + 1;
+    } else if (mejorScore >= 0.45) {
+      span.className = "word sustitucion";
+      erroresDetalle.push({ tipo: "sustitucion", original: p, leida: mejorPalabra || "?" });
+      sustituciones++; totalErrores++;
+      idxLeida = mejorIdx + 1;
     } else {
-      span.className = "word error";
-      errores++;
+      span.className = "word omision";
+      erroresDetalle.push({ tipo: "omision", original: p, leida: "—" });
+      omisiones++; totalErrores++;
     }
   });
 
   document.getElementById("prog").style.width = "100%";
   document.getElementById("prog-label").textContent = palabras.length + " de " + palabras.length + " palabras";
-  document.getElementById("errores").textContent = errores;
+  document.getElementById("errores").textContent = totalErrores;
 
   const ppmFinal = Math.round((palabras.length / segundos) * 60);
   const precFinal = Math.round((coincidencias / palabras.length) * 100);
   document.getElementById("ppm").textContent = ppmFinal;
   document.getElementById("r-ppm").textContent = ppmFinal;
   document.getElementById("r-prec").textContent = precFinal + "%";
+  document.getElementById("r-omisiones").textContent = omisiones;
+  document.getElementById("r-sustituciones").textContent = sustituciones;
+
+  if (erroresDetalle.length > 0) {
+    const lista = document.getElementById("lista-errores");
+    lista.innerHTML = erroresDetalle.map(e => `
+      <div class="error-fila">
+        <span style="color:#374151">"${e.original}"</span>
+        <span style="color:#9ca3af">→ "${e.leida}"</span>
+        <span class="tag tag-${e.tipo}">${e.tipo}</span>
+      </div>
+    `).join("");
+    document.getElementById("detalle-errores").style.display = "block";
+  }
 
   document.getElementById("btn").textContent = "✓ Lectura completada";
   document.getElementById("mascot").textContent = "🌟";
   document.getElementById("msg").textContent = "¡Genial! Mira tus resultados";
   document.getElementById("result").classList.add("show");
+
+  const alumno = document.getElementById("alumno").value.trim();
+  const { error } = await sb.from("sesiones").insert({
+    alumno: alumno,
+    fecha: new Date().toISOString(),
+    ppm: ppmFinal,
+    precision: precFinal,
+    omisiones: omisiones,
+    sustituciones: sustituciones,
+    repeticiones: reps,
+    texto_id: "abejas-2b"
+  });
+
+  if (!error) {
+    document.getElementById("guardado").style.display = "block";
+  }
 }
 </script>
 </body>
