@@ -92,7 +92,8 @@
   <div class="mascot-msg" id="msg">Lee el texto en voz alta cuando estés listo</div>
 
   <div class="text-card">
-    <div class="text-meta">Las abejas — Ciencias Naturales · 40 palabras</div>
+    <div class="text-meta" id="text-meta">Cargando lectura...</div>
+    document.getElementById("text-meta").textContent = `${lecturaActual.titulo} — ${lecturaActual.materia} · ${palabras.length} palabras`;
     <div class="leyenda">
       <div class="leyenda-item"><div class="leyenda-dot" style="background:#fca5a5"></div><span>Omisión</span></div>
       <div class="leyenda-item"><div class="leyenda-dot" style="background:#fde68a"></div><span>Sustitución</span></div>
@@ -140,7 +141,56 @@ const SUPABASE_URL = "https://mvwuyxrlkyikfgxzokxv.supabase.co";
 const SUPABASE_KEY = "sb_publishable_SNSZe5l2R3jcxiHxcxEqgg_XBrW-Xvi";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const textOriginal = "Las abejas son insectos que viven en colonias. Dentro de la colmena trabajan juntas para producir miel. La abeja reina pone huevos y las obreras cuidan la colmena. Recogen el néctar de las flores y lo transforman en miel.";
+const lecturas = [
+  {
+    id: "animales-1p",
+    titulo: "Los animales domésticos",
+    materia: "Ciencias Naturales",
+    curso: "1P",
+    texto: "Los animales domésticos viven con las personas en casa. El perro y el gato son los más comunes. El perro ladra y el gato maúlla. Necesitan comida, agua y cariño cada día. Algunos animales domésticos nos ayudan, como el perro guía que acompaña a personas con problemas de visión. Debemos cuidarlos y quererlos siempre."
+  },
+  {
+    id: "familia-1p",
+    titulo: "Mi familia",
+    materia: "Lengua",
+    curso: "1P",
+    texto: "En mi familia somos cuatro personas. Mi papá se llama Carlos y trabaja de médico. Mi mamá se llama Ana y es maestra. Mi hermana pequeña se llama Lucía y tiene tres años. Los fines de semana salimos juntos al parque. Me gusta mucho estar con mi familia porque nos queremos mucho."
+  },
+  {
+    id: "frutas-1p",
+    titulo: "Las frutas",
+    materia: "Entorno",
+    curso: "1P",
+    texto: "Las frutas son alimentos muy sanos y deliciosos. Las hay de muchos colores: las manzanas son rojas o verdes, los plátanos son amarillos y las naranjas son naranjas. Tienen vitaminas que nos ayudan a crecer sanos y fuertes. Debemos comer fruta todos los días. En España se cultivan muchas frutas como naranjas, fresas y melones."
+  },
+  {
+    id: "abejas-2p",
+    titulo: "Las abejas",
+    materia: "Ciencias Naturales",
+    curso: "2P",
+    texto: "Las abejas son insectos que viven en colonias. Dentro de la colmena trabajan juntas para producir miel. La abeja reina pone huevos y las obreras cuidan la colmena. Recogen el néctar de las flores y lo transforman en miel. También ayudan a las plantas a reproducirse cuando llevan el polen de unas flores a otras."
+  },
+  {
+    id: "agua-2p",
+    titulo: "El agua",
+    materia: "Ciencias Naturales",
+    curso: "2P",
+    texto: "El agua es un elemento muy importante para todos los seres vivos. Las personas, los animales y las plantas necesitan agua para vivir. El agua que bebemos viene de los ríos y los embalses. Antes de llegar a nuestra casa se limpia en las potabilizadoras. Debemos ahorrar agua y no malgastarla. Podemos cerrar el grifo mientras nos lavamos los dientes. El agua es un bien muy valioso que hay que cuidar."
+  },
+  {
+    id: "mercado-2p",
+    titulo: "El mercado",
+    materia: "Matemáticas",
+    curso: "2P",
+    texto: "En el mercado se venden muchos productos diferentes. Hay puestos de frutas, verduras, carne y pescado. Los vendedores pesan los alimentos con una balanza. Si compras un kilo de manzanas y otro de peras, llevas dos kilos en total. Cuando pagas, el vendedor te da el cambio. Si das cinco euros y la compra vale tres, te devuelven dos euros. Ir al mercado es aprender matemáticas sin darse cuenta."
+  }
+];
+
+// Elegir lectura según curso del alumno
+const cursoAlumno = localStorage.getItem("alumno_curso") || "2P";
+const lecturasDelCurso = lecturas.filter(l => l.curso === cursoAlumno);
+const lecturaActual = lecturasDelCurso[Math.floor(Math.random() * lecturasDelCurso.length)];
+const textOriginal = lecturaActual.texto;
 const palabras = textOriginal.split(" ");
 
 const texto = document.getElementById("texto");
