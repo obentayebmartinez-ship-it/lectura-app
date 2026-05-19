@@ -222,6 +222,7 @@ async function parar() {
     formData.append("prompt", textOriginal);
     formData.append("temperature", "0");
     formData.append("response_format", "verbose_json");
+    formData.append("timestamp_granularities[]", "word");
     const apikey = document.getElementById("apikey").value.trim();
     const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
       method: "POST",
@@ -229,60 +230,99 @@ async function parar() {
       body: formData
     });
     const data = await res.json();
-    procesarResultado(data.text || "", data.segments || []);
+    procesarResultado(data.text || "", data.words || [], data.segments || []);
   };
+}
+
+// Levenshtein real para comparar caracteres
+function levenshtein(a, b) {
+  const m = a.length, n = b.length;
+  const dp = Array.from({length: m+1}, (_, i) => Array.from({length: n+1}, (_, j) => i === 0 ? j : j === 0 ? i : 0));
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1] : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+    }
+  }
+  return dp[m][n];
 }
 
 function normalizar(str) {
   return str.toLowerCase()
-    .replace(/[.,;:!?¡¿]/g, "")
+    .replace(/[.,;:!?¡¿\-]/g, "")
     .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
     .trim();
 }
 
-function similitud(a, b) {
-  a = normalizar(a); b = normalizar(b);
+// Palabras funcionales que se tratan con más tolerancia
+const PALABRAS_FUNCIONALES = new Set(["el","la","los","las","un","una","unos","unas","de","del","al","en","y","a","que","se","su","con","por","para","es","son","lo","le","me","te","nos"]);
+
+function similitud(orig, leida) {
+  const a = normalizar(orig);
+  const b = normalizar(leida);
   if (a === b) return 1;
-  if (a.includes(b) || b.includes(a)) return 0.85;
+
+  // Palabras funcionales — más tolerancia
+  if (PALABRAS_FUNCIONALES.has(a) && PALABRAS_FUNCIONALES.has(b)) return 0.9;
+
+  // Contiene la otra (silabeo parcial)
+  if (a.includes(b) || b.includes(a)) return 0.82;
+
   const maxLen = Math.max(a.length, b.length);
   if (maxLen === 0) return 1;
-  let diff = 0;
-  for (let i = 0; i < Math.min(a.length, b.length); i++) {
-    if (a[i] !== b[i]) diff++;
-  }
-  diff += Math.abs(a.length - b.length);
-  return 1 - (diff / maxLen);
+
+  const dist = levenshtein(a, b);
+
+  // Umbral adaptativo según longitud — palabras cortas son más estrictas
+  if (maxLen <= 3) return dist === 0 ? 1 : dist === 1 ? 0.6 : 0;
+  if (maxLen <= 6) return 1 - (dist / maxLen) > 0.6 ? 1 - (dist / maxLen) : 0;
+  return 1 - (dist / maxLen);
 }
 
 function detectarRepeticiones(leidas) {
   const repetidas = new Set();
   for (let i = 1; i < leidas.length; i++) {
-    if (normalizar(leidas[i]) === normalizar(leidas[i - 1])) {
+    if (normalizar(leidas[i]) === normalizar(leidas[i-1])) {
       repetidas.add(normalizar(leidas[i]));
     }
   }
   return repetidas;
 }
 
-async function procesarResultado(transcripcion, segmentos = []) {
-  const leidas = transcripcion.split(/\s+/).filter(w => w.length > 0);
-
-  const vacilaciones = new Set();
-  if (segmentos.length > 0) {
-    segmentos.forEach(seg => {
-      if (seg.words) {
-        seg.words.forEach((w, i) => {
-          if (i > 0 && w.start - seg.words[i-1].end > 1.5) {
-            vacilaciones.add(normalizar(w.word));
-          }
-        });
-      }
-    });
+function detectarSilabeo(words, palabraOrig) {
+  // Si una palabra del texto aparece como múltiples words cortas consecutivas en Whisper
+  // con poca duración cada una, es probable silabeo
+  if (!words || words.length === 0) return false;
+  const orig = normalizar(palabraOrig);
+  for (let i = 0; i < words.length - 1; i++) {
+    const w1 = normalizar(words[i].word);
+    const w2 = normalizar(words[i+1].word);
+    const combinada = w1 + w2;
+    const duracion1 = (words[i].end - words[i].start);
+    if (combinada === orig && duracion1 < 0.4) return true;
+    if (orig.startsWith(w1) && orig.endsWith(w2) && duracion1 < 0.4) return true;
   }
+  return false;
+}
 
+function detectarVacilaciones(words) {
+  const vacilaciones = new Set();
+  if (!words || words.length === 0) return vacilaciones;
+  for (let i = 1; i < words.length; i++) {
+    const pausa = words[i].start - words[i-1].end;
+    if (pausa > 1.2) {
+      vacilaciones.add(normalizar(words[i].word));
+    }
+  }
+  return vacilaciones;
+}
+
+async function procesarResultado(transcripcion, words = [], segmentos = []) {
+  const leidas = transcripcion.split(/\s+/).filter(w => w.length > 0);
   const repetidas = detectarRepeticiones(leidas);
+  const vacilaciones = detectarVacilaciones(words);
   const erroresDetalle = [];
-  let omisiones = 0, sustituciones = 0, reps = 0, totalErrores = 0, coincidencias = 0;
+  let omisiones = 0, sustituciones = 0, reps = 0, vacs = 0, posibleSilabeo = 0;
+  let totalErrores = 0, coincidencias = 0;
   let idxLeida = 0;
 
   palabras.forEach((p, i) => {
@@ -290,16 +330,31 @@ async function procesarResultado(transcripcion, segmentos = []) {
     const span = document.getElementById("w" + i);
     let mejorScore = 0, mejorIdx = idxLeida, mejorPalabra = "";
 
-    for (let j = idxLeida; j < Math.min(idxLeida + 5, leidas.length); j++) {
-      const score = similitud(orig, leidas[j]);
+    // Ventana de búsqueda ampliada a 8 palabras
+    for (let j = idxLeida; j < Math.min(idxLeida + 8, leidas.length); j++) {
+      const score = similitud(p, leidas[j]);
       if (score > mejorScore) { mejorScore = score; mejorIdx = j; mejorPalabra = leidas[j]; }
     }
 
+    const esSilabeo = detectarSilabeo(words.slice(idxLeida, idxLeida + 6), p);
+    const esVacilacion = vacilaciones.has(orig);
+    const esRepeticion = repetidas.has(normalizar(mejorPalabra));
+
     if (mejorScore >= 0.75) {
-      if (repetidas.has(normalizar(mejorPalabra))) {
+      if (esSilabeo) {
+        span.className = "word sustitucion";
+        span.title = "Posible silabeo";
+        erroresDetalle.push({ tipo: "silabeo", original: p, leida: mejorPalabra });
+        posibleSilabeo++; totalErrores++;
+      } else if (esRepeticion) {
         span.className = "word repeticion";
         erroresDetalle.push({ tipo: "repeticion", original: p, leida: mejorPalabra });
         reps++; totalErrores++;
+      } else if (esVacilacion) {
+        span.className = "word sustitucion";
+        span.title = "Vacilación detectada";
+        erroresDetalle.push({ tipo: "vacilacion", original: p, leida: mejorPalabra });
+        vacs++; totalErrores++;
       } else {
         span.className = "word done";
         coincidencias++;
@@ -335,7 +390,7 @@ async function procesarResultado(transcripcion, segmentos = []) {
       <div class="error-fila">
         <span style="color:#374151">"${e.original}"</span>
         <span style="color:#9ca3af">→ "${e.leida}"</span>
-        <span class="tag tag-${e.tipo}">${e.tipo}</span>
+        <span class="tag tag-${e.tipo === 'silabeo' || e.tipo === 'vacilacion' ? 'sustitucion' : e.tipo}">${e.tipo}</span>
       </div>
     `).join("");
     document.getElementById("detalle-errores").style.display = "block";
@@ -355,6 +410,7 @@ async function procesarResultado(transcripcion, segmentos = []) {
     omisiones: omisiones,
     sustituciones: sustituciones,
     repeticiones: reps,
+    vacilaciones: vacs + posibleSilabeo,
     texto_id: lecturaActual.id
   });
 
