@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LectorIA — Acceso</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #f5f5f0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+    .card { background: white; border-radius: 20px; padding: 2rem; max-width: 400px; width: 100%; border: 1px solid #e5e7eb; }
+    .logo { text-align: center; font-size: 36px; margin-bottom: 0.5rem; }
+    .title { text-align: center; font-size: 22px; font-weight: 700; color: #111; margin-bottom: 0.25rem; }
+    .subtitle { text-align: center; font-size: 13px; color: #6b7280; margin-bottom: 2rem; }
+    .tabs { display: flex; background: #f3f4f6; border-radius: 10px; padding: 4px; margin-bottom: 1.5rem; }
+    .tab { flex: 1; text-align: center; padding: 8px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; color: #6b7280; transition: all 0.2s; }
+    .tab.active { background: white; color: #111; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    label { font-size: 12px; font-weight: 500; color: #374151; display: block; margin-bottom: 4px; }
+    input { width: 100%; padding: 10px 14px; border-radius: 10px; border: 1px solid #e5e7eb; font-size: 14px; margin-bottom: 1rem; outline: none; transition: border 0.2s; }
+    input:focus { border-color: #10b981; }
+    .btn { width: 100%; padding: 12px; border-radius: 12px; border: none; background: #10b981; color: white; font-size: 15px; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
+    .btn:hover { opacity: 0.9; }
+    .error { font-size: 12px; color: #ef4444; text-align: center; margin-top: 0.75rem; display: none; }
+    .divider { text-align: center; font-size: 12px; color: #9ca3af; margin: 1rem 0; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">📖</div>
+  <div class="title">LectorIA</div>
+  <div class="subtitle">Plataforma de estimulación lectora</div>
+
+  <div class="tabs">
+    <div class="tab active" id="tab-login" onclick="setTab('login')">Entrar</div>
+    <div class="tab" id="tab-registro" onclick="setTab('registro')">Registrarse</div>
+  </div>
+
+  <div id="form-login">
+    <label>Email</label>
+    <input type="email" id="login-email" placeholder="tu@email.com" />
+    <label>Contraseña</label>
+    <input type="password" id="login-pass" placeholder="••••••••" />
+    <button class="btn" onclick="login()">Entrar</button>
+  </div>
+
+  <div id="form-registro" style="display:none">
+    <label>Nombre completo</label>
+    <input type="text" id="reg-nombre" placeholder="Tu nombre" />
+    <label>Email</label>
+    <input type="email" id="reg-email" placeholder="tu@email.com" />
+    <label>Contraseña</label>
+    <input type="password" id="reg-pass" placeholder="Mínimo 6 caracteres" />
+    <label>Soy...</label>
+    <select id="reg-rol" style="width:100%;padding:10px 14px;border-radius:10px;border:1px solid #e5e7eb;font-size:14px;margin-bottom:1rem;">
+      <option value="docente">Docente</option>
+      <option value="padre">Padre / Madre</option>
+    </select>
+    <button class="btn" onclick="registro()">Crear cuenta</button>
+  </div>
+
+  <div class="error" id="error-msg"></div>
+</div>
+
+<script>
+const SUPABASE_URL = "https://mvwuyxrlkyikfgxzokxv.supabase.co";
+const SUPABASE_KEY = "sb_publishable_SNSZe5l2R3jcxiHxcxEqgg_XBrW-Xvi";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+function setTab(tab) {
+  document.getElementById("tab-login").className = "tab" + (tab === "login" ? " active" : "");
+  document.getElementById("tab-registro").className = "tab" + (tab === "registro" ? " active" : "");
+  document.getElementById("form-login").style.display = tab === "login" ? "block" : "none";
+  document.getElementById("form-registro").style.display = tab === "registro" ? "block" : "none";
+  document.getElementById("error-msg").style.display = "none";
+}
+
+function mostrarError(msg) {
+  const el = document.getElementById("error-msg");
+  el.textContent = msg;
+  el.style.display = "block";
+}
+
+async function login() {
+  const email = document.getElementById("login-email").value.trim();
+  const pass = document.getElementById("login-pass").value;
+  if (!email || !pass) { mostrarError("Rellena todos los campos"); return; }
+  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+  if (error) { mostrarError("Email o contraseña incorrectos"); return; }
+  window.location.href = "panel.html";
+}
+
+async function registro() {
+  const nombre = document.getElementById("reg-nombre").value.trim();
+  const email = document.getElementById("reg-email").value.trim();
+  const pass = document.getElementById("reg-pass").value;
+  const rol = document.getElementById("reg-rol").value;
+  if (!nombre || !email || !pass) { mostrarError("Rellena todos los campos"); return; }
+  if (pass.length < 6) { mostrarError("La contraseña debe tener al menos 6 caracteres"); return; }
+  const { error } = await sb.auth.signUp({ email, password: pass, options: { data: { nombre, rol } } });
+  if (error) { mostrarError("Error al crear la cuenta: " + error.message); return; }
+  window.location.href = "panel.html";
+}
+
+// Si ya está logado va directo al panel
+sb.auth.getSession().then(({ data }) => {
+  if (data.session) window.location.href = "panel.html";
+});
+</script>
+</body>
+</html>

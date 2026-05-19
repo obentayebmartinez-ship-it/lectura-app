@@ -10,8 +10,11 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: system-ui, sans-serif; background: #f5f5f0; padding: 1.5rem; }
-    h1 { font-size: 20px; font-weight: 700; color: #111; margin-bottom: 0.25rem; }
-    .subtitle { font-size: 13px; color: #6b7280; margin-bottom: 1.5rem; }
+    .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+    .topbar-left h1 { font-size: 20px; font-weight: 700; color: #111; }
+    .topbar-left p { font-size: 13px; color: #6b7280; }
+    .btn-logout { font-size: 12px; padding: 6px 14px; border-radius: 8px; border: 1px solid #e5e7eb; background: white; color: #374151; cursor: pointer; }
+    .btn-logout:hover { background: #f9fafb; }
     .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 1.5rem; }
     .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 1.5rem; }
     .card { background: white; border-radius: 14px; padding: 1.25rem; border: 1px solid #e5e7eb; }
@@ -33,15 +36,24 @@
     .barra-fill { height: 100%; border-radius: 4px; }
     .loading { text-align: center; color: #9ca3af; font-size: 14px; padding: 2rem; }
     .btn-pdf { font-size: 11px; padding: 4px 10px; border-radius: 8px; border: 1px solid #d1d5db; background: white; color: #374151; cursor: pointer; margin-left: 8px; }
-    .btn-pdf:hover { background: #f9fafb; }
+    .btn-leer { font-size: 11px; padding: 4px 10px; border-radius: 8px; border: none; background: #10b981; color: white; cursor: pointer; }
     .alumno-derecha { display: flex; align-items: center; gap: 6px; }
+    .add-alumno { display: flex; gap: 8px; margin-bottom: 1rem; flex-wrap: wrap; }
+    .add-alumno input, .add-alumno select { padding: 8px 12px; border-radius: 8px; border: 1px solid #e5e7eb; font-size: 13px; flex: 1; min-width: 120px; }
+    .btn-add { padding: 8px 16px; border-radius: 8px; border: none; background: #10b981; color: white; font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+    .lista-mis-alumnos .alumno-fila { cursor: default; }
     @media (max-width: 600px) { .grid-4 { grid-template-columns: 1fr 1fr; } .grid-2 { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
 
-<h1>📊 Panel del Docente</h1>
-<p class="subtitle">LectorIA — Seguimiento de velocidad lectora</p>
+<div class="topbar">
+  <div class="topbar-left">
+    <h1>📊 Panel del Docente</h1>
+    <p id="user-email">Cargando...</p>
+  </div>
+  <button class="btn-logout" onclick="cerrarSesion()">Cerrar sesión</button>
+</div>
 
 <div class="grid-4">
   <div class="card">
@@ -68,23 +80,35 @@
 
 <div class="grid-2">
   <div class="card">
-    <div class="card-title">Evolución PPM de la clase</div>
-    <canvas id="chartPPM" height="200"></canvas>
+    <div class="card-title">Mis alumnos</div>
+    <div class="add-alumno">
+      <input type="text" id="nuevo-nombre" placeholder="Nombre del alumno" />
+      <select id="nuevo-curso">
+        <option value="1P">1º Primaria</option>
+        <option value="2P" selected>2º Primaria</option>
+        <option value="3P">3º Primaria</option>
+        <option value="4P">4º Primaria</option>
+        <option value="5P">5º Primaria</option>
+        <option value="6P">6º Primaria</option>
+      </select>
+      <button class="btn-add" onclick="añadirAlumno()">+ Añadir</button>
+    </div>
+    <div id="lista-mis-alumnos" class="lista-mis-alumnos"><div class="loading">Cargando alumnos...</div></div>
   </div>
   <div class="card">
-    <div class="card-title">Alumnos — última sesión</div>
-    <div id="lista-alumnos"><div class="loading">Cargando...</div></div>
+    <div class="card-title">Evolución PPM de la clase</div>
+    <canvas id="chartPPM" height="220"></canvas>
   </div>
 </div>
 
 <div class="grid-2">
   <div class="card">
-    <div class="card-title">Tipos de errores acumulados</div>
-    <div id="lista-errores"><div class="loading">Cargando...</div></div>
+    <div class="card-title">Últimas sesiones</div>
+    <div id="lista-alumnos"><div class="loading">Cargando...</div></div>
   </div>
   <div class="card">
-    <div class="card-title">Distribución PPM actual</div>
-    <canvas id="chartDistribucion" height="200"></canvas>
+    <div class="card-title">Tipos de errores acumulados</div>
+    <div id="lista-errores"><div class="loading">Cargando...</div></div>
   </div>
 </div>
 
@@ -94,14 +118,66 @@ const SUPABASE_KEY = "sb_publishable_SNSZe5l2R3jcxiHxcxEqgg_XBrW-Xvi";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let todosLosDatos = [];
+let sesionUsuario = null;
+
+async function init() {
+  const { data } = await sb.auth.getSession();
+  if (!data.session) { 
+  console.log("sin sesion");
+  return; 
+}  sesionUsuario = data.session.user;
+  document.getElementById("user-email").textContent = sesionUsuario.user_metadata?.nombre || sesionUsuario.email;
+  await cargarAlumnos();
+  await cargarDatos();
+}
+
+async function cerrarSesion() {
+  await sb.auth.signOut();
+  window.location.href = "login.html";
+}
+
+async function añadirAlumno() {
+  const nombre = document.getElementById("nuevo-nombre").value.trim();
+  const curso = document.getElementById("nuevo-curso").value;
+  if (!nombre) { alert("Introduce el nombre del alumno"); return; }
+  const { error } = await sb.from("alumnos").insert({ nombre, curso, user_id: sesionUsuario.id });
+  if (error) { alert("Error al añadir alumno"); return; }
+  document.getElementById("nuevo-nombre").value = "";
+  await cargarAlumnos();
+}
+
+async function cargarAlumnos() {
+  const { data } = await sb.from("alumnos").select("*").eq("user_id", sesionUsuario.id).order("nombre");
+  const lista = document.getElementById("lista-mis-alumnos");
+  if (!data || data.length === 0) {
+    lista.innerHTML = "<div class='loading'>Aún no has añadido alumnos</div>";
+    return;
+  }
+  lista.innerHTML = data.map(a => `
+    <div class="alumno-fila">
+      <div>
+        <div class="alumno-nombre">${a.nombre}</div>
+        <div class="alumno-ppm">${a.curso}</div>
+      </div>
+      <div class="alumno-derecha">
+        <button class="btn-leer" onclick="irALectura('${a.nombre}', '${a.curso}')">▶ Leer</button>
+      </div>
+    </div>`).join("");
+}
+
+function irALectura(nombre, curso) {
+  localStorage.setItem("alumno_nombre", nombre);
+  localStorage.setItem("alumno_curso", curso);
+  window.location.href = "index.html";
+}
 
 async function cargarDatos() {
   const { data, error } = await sb.from("sesiones").select("*").order("fecha", { ascending: true });
   if (error || !data || data.length === 0) {
     document.getElementById("lista-alumnos").innerHTML = "<div class='loading'>No hay sesiones todavía</div>";
+    document.getElementById("lista-errores").innerHTML = "<div class='loading'>No hay datos todavía</div>";
     return;
   }
-
   todosLosDatos = data;
 
   const ppmMedio = Math.round(data.reduce((s, r) => s + r.ppm, 0) / data.length);
@@ -119,7 +195,6 @@ async function cargarDatos() {
     data: {
       labels,
       datasets: [{
-        label: "PPM",
         data: ppms,
         borderColor: "#10b981",
         backgroundColor: "rgba(16,185,129,0.08)",
@@ -128,7 +203,6 @@ async function cargarDatos() {
         fill: true,
         tension: 0.35
       }, {
-        label: "Objetivo 2º",
         data: Array(labels.length).fill(90),
         borderColor: "#d1d5db",
         borderWidth: 1.5,
@@ -149,7 +223,7 @@ async function cargarDatos() {
 
   const ultimasSesiones = {};
   data.forEach(r => { ultimasSesiones[r.alumno] = r; });
-  const listaHTML = Object.values(ultimasSesiones).map(r => {
+  document.getElementById("lista-alumnos").innerHTML = Object.values(ultimasSesiones).map(r => {
     const badge = r.ppm >= 90 ? "badge-ok" : r.ppm >= 70 ? "badge-warn" : "badge-bad";
     const texto = r.ppm >= 90 ? "En nivel" : r.ppm >= 70 ? "Cerca" : "Necesita apoyo";
     return `
@@ -164,61 +238,15 @@ async function cargarDatos() {
         </div>
       </div>`;
   }).join("");
-  document.getElementById("lista-alumnos").innerHTML = listaHTML;
 
   const totalOmisiones = data.reduce((s, r) => s + r.omisiones, 0);
   const totalSustituciones = data.reduce((s, r) => s + r.sustituciones, 0);
   const totalRepeticiones = data.reduce((s, r) => s + r.repeticiones, 0);
   const totalErrores = totalOmisiones + totalSustituciones + totalRepeticiones || 1;
   document.getElementById("lista-errores").innerHTML = `
-    <div class="error-fila">
-      <span>Omisiones</span>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <div class="barra-wrap"><div class="barra-fill" style="width:${(totalOmisiones/totalErrores)*100}%;background:#fca5a5"></div></div>
-        <span style="font-size:12px;color:#6b7280">${totalOmisiones}</span>
-      </div>
-    </div>
-    <div class="error-fila">
-      <span>Sustituciones</span>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <div class="barra-wrap"><div class="barra-fill" style="width:${(totalSustituciones/totalErrores)*100}%;background:#fde68a"></div></div>
-        <span style="font-size:12px;color:#6b7280">${totalSustituciones}</span>
-      </div>
-    </div>
-    <div class="error-fila">
-      <span>Repeticiones</span>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <div class="barra-wrap"><div class="barra-fill" style="width:${(totalRepeticiones/totalErrores)*100}%;background:#ddd6fe"></div></div>
-        <span style="font-size:12px;color:#6b7280">${totalRepeticiones}</span>
-      </div>
-    </div>`;
-
-  const rangos = { "40-60": 0, "60-80": 0, "80-100": 0, "100+": 0 };
-  data.forEach(r => {
-    if (r.ppm < 60) rangos["40-60"]++;
-    else if (r.ppm < 80) rangos["60-80"]++;
-    else if (r.ppm < 100) rangos["80-100"]++;
-    else rangos["100+"]++;
-  });
-  new Chart(document.getElementById("chartDistribucion"), {
-    type: "bar",
-    data: {
-      labels: Object.keys(rangos),
-      datasets: [{
-        data: Object.values(rangos),
-        backgroundColor: ["#fca5a5", "#fde68a", "#86efac", "#6ee7b7"],
-        borderRadius: 6
-      }]
-    },
-    options: {
-      responsive: true,
-      plugins: { legend: { display: false } },
-      scales: {
-        y: { ticks: { stepSize: 1, font: { size: 11 } }, grid: { color: "rgba(0,0,0,0.05)" } },
-        x: { ticks: { font: { size: 11 } }, grid: { display: false } }
-      }
-    }
-  });
+    <div class="error-fila"><span>Omisiones</span><div style="display:flex;align-items:center;gap:8px;"><div class="barra-wrap"><div class="barra-fill" style="width:${(totalOmisiones/totalErrores)*100}%;background:#fca5a5"></div></div><span style="font-size:12px;color:#6b7280">${totalOmisiones}</span></div></div>
+    <div class="error-fila"><span>Sustituciones</span><div style="display:flex;align-items:center;gap:8px;"><div class="barra-wrap"><div class="barra-fill" style="width:${(totalSustituciones/totalErrores)*100}%;background:#fde68a"></div></div><span style="font-size:12px;color:#6b7280">${totalSustituciones}</span></div></div>
+    <div class="error-fila"><span>Repeticiones</span><div style="display:flex;align-items:center;gap:8px;"><div class="barra-wrap"><div class="barra-fill" style="width:${(totalRepeticiones/totalErrores)*100}%;background:#ddd6fe"></div></div><span style="font-size:12px;color:#6b7280">${totalRepeticiones}</span></div></div>`;
 }
 
 function generarPDF(nombreAlumno) {
@@ -235,128 +263,57 @@ function generarPDF(nombreAlumno) {
     ? "El alumno está cerca del objetivo. Se recomienda práctica diaria de 10 minutos con lecturas de su nivel actual."
     : "El alumno necesita apoyo adicional. Se recomienda sesiones de lectura guiada y revisión con el orientador educativo.";
 
-  // Cabecera
   doc.setFillColor(16, 185, 129);
   doc.rect(0, 0, 210, 28, "F");
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(18);
-  doc.setFont("helvetica", "bold");
+  doc.setFontSize(18); doc.setFont("helvetica", "bold");
   doc.text("LectorIA", 14, 12);
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11); doc.setFont("helvetica", "normal");
   doc.text("Informe de Velocidad Lectora", 14, 21);
   doc.text(fecha, 196, 21, { align: "right" });
-
-  // Datos alumno
   doc.setTextColor(17, 17, 17);
-  doc.setFontSize(16);
-  doc.setFont("helvetica", "bold");
+  doc.setFontSize(16); doc.setFont("helvetica", "bold");
   doc.text(nombreAlumno, 14, 42);
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11); doc.setFont("helvetica", "normal");
   doc.setTextColor(107, 114, 128);
-  doc.text(`Nivel 2º Primaria  ·  ${sesiones.length} sesión(es) completada(s)`, 14, 50);
-
-  // Métricas
+  doc.text(`${sesiones.length} sesión(es) completada(s)`, 14, 50);
   doc.setFillColor(249, 250, 251);
   doc.roundedRect(14, 58, 85, 30, 4, 4, "F");
   doc.roundedRect(111, 58, 85, 30, 4, 4, "F");
-
-  doc.setTextColor(107, 114, 128);
-  doc.setFontSize(9);
+  doc.setTextColor(107, 114, 128); doc.setFontSize(9);
   doc.text("PPM ACTUAL", 20, 66);
   doc.text("OBJETIVO CURSO", 117, 66);
-  doc.setTextColor(17, 17, 17);
-  doc.setFontSize(24);
-  doc.setFont("helvetica", "bold");
+  doc.setTextColor(17, 17, 17); doc.setFontSize(24); doc.setFont("helvetica", "bold");
   doc.text(String(ultima.ppm), 20, 82);
   doc.text(String(objetivo), 117, 82);
-
-  // Estado
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10); doc.setFont("helvetica", "normal");
   const estadoColor = ultima.ppm >= objetivo ? [6, 95, 70] : ultima.ppm >= 70 ? [133, 77, 14] : [153, 27, 27];
   doc.setTextColor(...estadoColor);
   doc.text(`Estado: ${estado}`, 14, 100);
-
-  // Separador
-  doc.setDrawColor(229, 231, 235);
-  doc.line(14, 106, 196, 106);
-
-  // Errores
-  doc.setTextColor(17, 17, 17);
-  doc.setFontSize(12);
-  doc.setFont("helvetica", "bold");
+  doc.setDrawColor(229, 231, 235); doc.line(14, 106, 196, 106);
+  doc.setTextColor(17, 17, 17); doc.setFontSize(12); doc.setFont("helvetica", "bold");
   doc.text("Detalle de errores", 14, 116);
-
-  const errores = [
-    { label: "Omisiones", valor: ultima.omisiones, color: [252, 165, 165] },
-    { label: "Sustituciones", valor: ultima.sustituciones, color: [253, 230, 138] },
-    { label: "Repeticiones", valor: ultima.repeticiones, color: [221, 214, 254] }
-  ];
-
-  errores.forEach((e, i) => {
+  [{ label: "Omisiones", valor: ultima.omisiones, color: [252, 165, 165] }, { label: "Sustituciones", valor: ultima.sustituciones, color: [253, 230, 138] }, { label: "Repeticiones", valor: ultima.repeticiones, color: [221, 214, 254] }].forEach((e, i) => {
     const y = 126 + i * 14;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.setTextColor(55, 65, 81);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(55, 65, 81);
     doc.text(e.label, 14, y);
     doc.setFillColor(...e.color);
     doc.roundedRect(80, y - 6, 60, 8, 2, 2, "F");
     doc.setTextColor(17, 17, 17);
     doc.text(String(e.valor), 112, y, { align: "center" });
   });
-
-  // Evolución sesiones
-  if (sesiones.length > 1) {
-    doc.setDrawColor(229, 231, 235);
-    doc.line(14, 172, 196, 172);
-    doc.setTextColor(17, 17, 17);
-    doc.setFontSize(12);
-    doc.setFont("helvetica", "bold");
-    doc.text("Evolución de sesiones", 14, 182);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.setTextColor(107, 114, 128);
-    doc.text("Fecha", 14, 192);
-    doc.text("PPM", 80, 192);
-    doc.text("Precisión", 120, 192);
-    doc.text("Errores", 170, 192);
-    sesiones.forEach((s, i) => {
-      const y = 200 + i * 10;
-      const fechaS = new Date(s.fecha).toLocaleDateString("es-ES");
-      doc.setTextColor(55, 65, 81);
-      doc.text(fechaS, 14, y);
-      doc.text(String(s.ppm), 80, y);
-      doc.text(s.precision + "%", 120, y);
-      doc.text(String(s.omisiones + s.sustituciones + s.repeticiones), 170, y);
-    });
-  }
-
-  // Recomendación
-  const yRec = sesiones.length > 1 ? 200 + sesiones.length * 10 + 10 : 172;
-  doc.setDrawColor(229, 231, 235);
-  doc.line(14, yRec, 196, yRec);
   doc.setFillColor(240, 253, 244);
-  doc.roundedRect(14, yRec + 8, 182, 30, 4, 4, "F");
-  doc.setTextColor(22, 101, 52);
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "bold");
-  doc.text("Recomendación", 20, yRec + 18);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  const lines = doc.splitTextToSize(recomendacion, 170);
-  doc.text(lines, 20, yRec + 26);
-
-  // Pie
-  doc.setTextColor(156, 163, 175);
-  doc.setFontSize(8);
+  doc.roundedRect(14, 172, 182, 30, 4, 4, "F");
+  doc.setTextColor(22, 101, 52); doc.setFontSize(10); doc.setFont("helvetica", "bold");
+  doc.text("Recomendación", 20, 182);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+  doc.text(doc.splitTextToSize(recomendacion, 170), 20, 190);
+  doc.setTextColor(156, 163, 175); doc.setFontSize(8);
   doc.text("Generado por LectorIA · Plataforma de estimulación lectora", 105, 285, { align: "center" });
-
   doc.save(`informe_${nombreAlumno.replace(/ /g,"_")}_${fecha.replace(/\//g,"-")}.pdf`);
 }
 
-cargarDatos();
+init();
 </script>
 </body>
 </html>
