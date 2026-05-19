@@ -235,7 +235,8 @@ async function cargarDatos() {
         </div>
         <div class="alumno-derecha">
           <span class="badge ${badge}">${texto}</span>
-          <button class="btn-pdf" onclick="generarPDF('${r.alumno}')">📄 PDF</button>
+          <button class="btn-pdf" onclick="window.location.href='alumno.html?alumno=${r.alumno}&curso=2P'">📊 Ver</button>
+<button class="btn-pdf" onclick="generarPDF('${r.alumno}')">📄 PDF</button>
         </div>
       </div>`;
   }).join("");
