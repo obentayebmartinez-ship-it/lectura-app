@@ -170,13 +170,51 @@ const SUPABASE_KEY = "sb_publishable_SNSZe5l2R3jcxiHxcxEqgg_XBrW-Xvi";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const lecturas = [
-  { id: "animales-1p", titulo: "Los animales domésticos", materia: "Ciencias Naturales", curso: "1P", texto: "Los animales domésticos viven con las personas en casa. El perro y el gato son los más comunes. El perro ladra y el gato maúlla. Necesitan comida, agua y cariño cada día. Algunos animales domésticos nos ayudan, como el perro guía que acompaña a personas con problemas de visión. Debemos cuidarlos y quererlos siempre." },
-  { id: "familia-1p", titulo: "Mi familia", materia: "Lengua", curso: "1P", texto: "En mi familia somos cuatro personas. Mi papá se llama Carlos y trabaja de médico. Mi mamá se llama Ana y es maestra. Mi hermana pequeña se llama Lucía y tiene tres años. Los fines de semana salimos juntos al parque. Me gusta mucho estar con mi familia porque nos queremos mucho." },
-  { id: "frutas-1p", titulo: "Las frutas", materia: "Entorno", curso: "1P", texto: "Las frutas son alimentos muy sanos y deliciosos. Las hay de muchos colores: las manzanas son rojas o verdes, los plátanos son amarillos y las naranjas son naranjas. Tienen vitaminas que nos ayudan a crecer sanos y fuertes. Debemos comer fruta todos los días. En España se cultivan muchas frutas como naranjas, fresas y melones." },
-  { id: "abejas-2p", titulo: "Las abejas", materia: "Ciencias Naturales", curso: "2P", texto: "Las abejas son insectos que viven en colonias. Dentro de la colmena trabajan juntas para producir miel. La abeja reina pone huevos y las obreras cuidan la colmena. Recogen el néctar de las flores y lo transforman en miel. También ayudan a las plantas a reproducirse cuando llevan el polen de unas flores a otras." },
-  { id: "agua-2p", titulo: "El agua", materia: "Ciencias Naturales", curso: "2P", texto: "El agua es un elemento muy importante para todos los seres vivos. Las personas, los animales y las plantas necesitan agua para vivir. El agua que bebemos viene de los ríos y los embalses. Antes de llegar a nuestra casa se limpia en las potabilizadoras. Debemos ahorrar agua y no malgastarla. Podemos cerrar el grifo mientras nos lavamos los dientes. El agua es un bien muy valioso que hay que cuidar." },
-  { id: "mercado-2p", titulo: "El mercado", materia: "Matemáticas", curso: "2P", texto: "En el mercado se venden muchos productos diferentes. Hay puestos de frutas, verduras, carne y pescado. Los vendedores pesan los alimentos con una balanza. Si compras un kilo de manzanas y otro de peras, llevas dos kilos en total. Cuando pagas, el vendedor te da el cambio. Si das cinco euros y la compra vale tres, te devuelven dos euros. Ir al mercado es aprender matemáticas sin darse cuenta." }
-];
+const lecturas = {
+  "1P": [
+    { id: "1p-01", titulo: "Los animales domésticos", materia: "Ciencias Naturales", texto: "Los animales domésticos viven con las personas en casa. El perro y el gato son los más comunes. El perro ladra y el gato maúlla. Necesitan comida, agua y cariño cada día. Algunos animales domésticos nos ayudan, como el perro guía que acompaña a personas con problemas de visión. Debemos cuidarlos y quererlos siempre." },
+    { id: "1p-02", titulo: "Mi familia", materia: "Lengua", texto: "En mi familia somos cuatro personas. Mi papá se llama Carlos y trabaja de médico. Mi mamá se llama Ana y es maestra. Mi hermana pequeña se llama Lucía y tiene tres años. Los fines de semana salimos juntos al parque. Me gusta mucho estar con mi familia porque nos queremos mucho." },
+    { id: "1p-03", titulo: "Las frutas", materia: "Entorno", texto: "Las frutas son alimentos muy sanos y deliciosos. Las hay de muchos colores: las manzanas son rojas o verdes, los plátanos son amarillos y las naranjas son naranjas. Tienen vitaminas que nos ayudan a crecer sanos y fuertes. Debemos comer fruta todos los días. En España se cultivan muchas frutas como naranjas, fresas y melones." },
+    { id: "1p-04", titulo: "El sol y la luna", materia: "Ciencias Naturales", texto: "El sol es una estrella muy grande que nos da luz y calor. Sale por la mañana y se pone por la tarde. La luna sale por la noche y nos alumbra cuando está oscuro. A veces la luna es redonda y se llama luna llena. El sol y la luna son muy importantes para todos los seres vivos de la Tierra." },
+    { id: "1p-05", titulo: "Los colores", materia: "Plástica", texto: "Los colores están en todas partes. El cielo es azul, la hierba es verde y el sol es amarillo. Cuando mezclamos el azul y el amarillo obtenemos el verde. Con el rojo y el amarillo hacemos el naranja. Los colores primarios son el rojo, el amarillo y el azul. Con ellos podemos crear todos los demás colores del mundo." },
+    { id: "1p-06", titulo: "El cuerpo humano", materia: "Ciencias Naturales", texto: "Nuestro cuerpo tiene muchas partes. La cabeza, el tronco y las extremidades son las partes principales. Con los brazos cogemos las cosas y con las piernas andamos y corremos. Los ojos nos sirven para ver y los oídos para escuchar. Debemos cuidar nuestro cuerpo comiendo bien, haciendo ejercicio y durmiendo las horas necesarias cada día." },
+    { id: "1p-07", titulo: "Las estaciones", materia: "Ciencias Naturales", texto: "El año tiene cuatro estaciones. En primavera hace calor y florecen las plantas. En verano el sol brilla mucho y vamos a la playa. En otoño las hojas de los árboles se vuelven marrones y caen al suelo. En invierno hace mucho frío y a veces nieva. Cada estación es diferente y tiene cosas bonitas que podemos disfrutar." },
+    { id: "1p-08", titulo: "Mi cole", materia: "Lengua", texto: "Mi colegio se llama Rosaleda. Tiene muchas clases, un patio grande y una biblioteca. Por la mañana saludo a mis amigos y a mi maestra. En clase aprendemos a leer, a escribir y a sumar. En el recreo jugamos y merendamos. Me gusta mucho ir al colegio porque aprendo cosas nuevas cada día y me lo paso muy bien." },
+    { id: "1p-09", titulo: "Los medios de transporte", materia: "Conocimiento del Medio", texto: "Hay muchos medios de transporte. El coche y el autobús van por la carretera. El tren va por las vías. El avión vuela por el cielo y el barco navega por el mar. Algunos transportes llevan personas y otros llevan mercancías. Para ir al colegio yo voy andando porque vivo cerca. Es bueno caminar para cuidar el medio ambiente." },
+    { id: "1p-10", titulo: "El agua en casa", materia: "Ciencias Naturales", texto: "El agua es muy importante en nuestra casa. La usamos para beber, para cocinar y para ducharnos. Cuando abrimos el grifo sale agua limpia. Debemos cerrar el grifo cuando nos lavamos los dientes para no malgastarla. El agua es un bien muy valioso que hay que cuidar. Sin agua no podrían vivir las personas, los animales ni las plantas." }
+  ],
+  "2P": [
+    { id: "2p-01", titulo: "Las abejas", materia: "Ciencias Naturales", texto: "Las abejas son insectos que viven en colonias. Dentro de la colmena trabajan juntas para producir miel. La abeja reina pone huevos y las obreras cuidan la colmena. Recogen el néctar de las flores y lo transforman en miel. También ayudan a las plantas a reproducirse cuando llevan el polen de unas flores a otras." },
+    { id: "2p-02", titulo: "El agua", materia: "Ciencias Naturales", texto: "El agua es un elemento muy importante para todos los seres vivos. Las personas, los animales y las plantas necesitan agua para vivir. El agua que bebemos viene de los ríos y los embalses. Antes de llegar a nuestra casa se limpia en las potabilizadoras. Debemos ahorrar agua y no malgastarla. Podemos cerrar el grifo mientras nos lavamos los dientes. El agua es un bien muy valioso que hay que cuidar." },
+    { id: "2p-03", titulo: "El mercado", materia: "Matemáticas", texto: "En el mercado se venden muchos productos diferentes. Hay puestos de frutas, verduras, carne y pescado. Los vendedores pesan los alimentos con una balanza. Si compras un kilo de manzanas y otro de peras, llevas dos kilos en total. Cuando pagas, el vendedor te da el cambio. Si das cinco euros y la compra vale tres, te devuelven dos euros. Ir al mercado es aprender matemáticas sin darse cuenta." },
+    { id: "2p-04", titulo: "Los dinosaurios", materia: "Ciencias Naturales", texto: "Los dinosaurios vivieron hace millones de años en la Tierra. Eran animales muy grandes y poderosos. Algunos comían plantas y otros comían carne. El tiranosaurio rex era uno de los más temibles. Los dinosaurios desaparecieron hace sesenta y cinco millones de años, probablemente por el impacto de un meteorito. Aunque ya no existen, podemos conocerlos gracias a los fósiles que los científicos encuentran en las rocas y en el suelo." },
+    { id: "2p-05", titulo: "La biblioteca", materia: "Lengua", texto: "La biblioteca es un lugar muy especial donde hay miles de libros. Podemos ir a leer, a estudiar o a buscar información. Los libros están ordenados por temas para encontrarlos fácilmente. El bibliotecario nos ayuda a elegir el libro que buscamos. En la biblioteca hay que guardar silencio para no molestar a los demás. Leer libros es una de las mejores actividades que podemos hacer porque nos enseña muchas cosas y desarrolla nuestra imaginación." },
+    { id: "2p-06", titulo: "Las plantas", materia: "Ciencias Naturales", texto: "Las plantas son seres vivos muy importantes para el planeta. Tienen raíces, tallo, hojas, flores y frutos. Las raíces absorben el agua y los nutrientes del suelo. Las hojas capturan la luz del sol para fabricar su alimento mediante la fotosíntesis. Las flores atraen a los insectos que ayudan a reproducirlas. Sin las plantas no habría oxígeno para respirar. Por eso debemos cuidarlas y no arrancarlas sin necesidad cuando paseamos por el campo." },
+    { id: "2p-07", titulo: "El sistema solar", materia: "Ciencias Naturales", texto: "El sistema solar está formado por el Sol y ocho planetas que giran a su alrededor. Los planetas son Mercurio, Venus, la Tierra, Marte, Júpiter, Saturno, Urano y Neptuno. La Tierra es el único planeta donde sabemos que existe vida. Júpiter es el planeta más grande de todos. Saturno tiene unos anillos muy bonitos formados por hielo y roca. La Luna es el satélite natural de la Tierra y gira a su alrededor cada mes." },
+    { id: "2p-08", titulo: "La alimentación saludable", materia: "Ciencias Naturales", texto: "Para crecer sanos y fuertes necesitamos comer de forma equilibrada. Las frutas y las verduras nos aportan vitaminas y minerales. Los cereales como el pan y el arroz nos dan energía. La leche y el queso fortalecen nuestros huesos. La carne y el pescado nos ayudan a desarrollar los músculos. Debemos beber mucha agua y evitar tomar demasiados dulces y refrescos. Hacer ejercicio junto con una buena alimentación es la clave para tener una vida saludable." },
+    { id: "2p-09", titulo: "Los oficios", materia: "Conocimiento del Medio", texto: "Hay muchos oficios diferentes en nuestra sociedad. Los médicos cuidan nuestra salud cuando estamos enfermos. Los maestros nos enseñan en el colegio. Los bomberos apagan los incendios y nos ayudan en las emergencias. Los agricultores cultivan los alimentos que comemos cada día. Los ingenieros diseñan puentes, edificios y máquinas. Todos los oficios son importantes y necesarios para que la sociedad funcione bien. Cuando seamos mayores podremos elegir el trabajo que más nos guste." },
+    { id: "2p-10", titulo: "El reciclaje", materia: "Ciencias Naturales", texto: "Reciclar significa transformar los objetos usados en materiales nuevos. En casa separamos los residuos en diferentes contenedores. El papel y el cartón van al contenedor azul. Los envases de plástico y las latas van al amarillo. El vidrio va al verde. Los restos de comida se pueden usar para hacer abono. Reciclar es muy importante porque ayuda a cuidar el medio ambiente y a no desperdiciar los recursos naturales de nuestro planeta." }
+  ]
+};
+
+const cursoAlumno = localStorage.getItem("alumno_curso") || "2P";
+const alumnoNombre = localStorage.getItem("alumno_nombre") || "";
+const lecturasDelCurso = lecturas[cursoAlumno] || lecturas["2P"];
+
+// Determinar qué lectura le toca — la siguiente que no ha hecho
+const sesionesAlumno = JSON.parse(localStorage.getItem("sesiones_" + alumnoNombre) || "[]");
+const lecturasHechas = new Set(sesionesAlumno.map(s => s.texto_id));
+const lecturaPendiente = lecturasDelCurso.find(l => !lecturasHechas.has(l.id));
+const lecturaActual = lecturaPendiente || lecturasDelCurso[0];
+
+const textOriginal = lecturaActual.texto;
+const palabras = textOriginal.split(" ");
+document.getElementById("materia-badge").textContent = lecturaActual.materia;
+document.getElementById("palabras-count").textContent = palabras.length + " palabras";
+
+// Mostrar número de lectura
+const numLectura = lecturasDelCurso.findIndex(l => l.id === lecturaActual.id) + 1;
+document.getElementById("nivel-badge").textContent = `Lectura ${numLectura}/${lecturasDelCurso.length}`;
 
 const cursoAlumno = localStorage.getItem("alumno_curso") || "2P";
 const lecturasDelCurso = lecturas.filter(l => l.curso === cursoAlumno);
@@ -384,7 +422,9 @@ async function procesarResultado(transcripcion, words = [], segmentos = []) {
   document.getElementById("mascot").textContent = "⭐";
   document.getElementById("msg").textContent = "¡Genial! Mira tus resultados";
   document.getElementById("result").classList.add("show");
-
+  const sesionesLocal = JSON.parse(localStorage.getItem("sesiones_" + alumno) || "[]");
+sesionesLocal.push({ texto_id: lecturaActual.id, ppm: ppmFinal, fecha: new Date().toISOString() });
+localStorage.setItem("sesiones_" + alumno, JSON.stringify(sesionesLocal));
   const { error } = await sb.from("sesiones").insert({
     alumno, fecha: new Date().toISOString(), ppm: ppmFinal, precision: precFinal,
     omisiones, sustituciones, repeticiones: reps, vacilaciones: vacs, texto_id: lecturaActual.id
