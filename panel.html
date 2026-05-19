@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LectorIA — Panel Docente</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #f5f5f0; padding: 1.5rem; }
+    h1 { font-size: 20px; font-weight: 700; color: #111; margin-bottom: 0.25rem; }
+    .subtitle { font-size: 13px; color: #6b7280; margin-bottom: 1.5rem; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 1.5rem; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 1.5rem; }
+    .card { background: white; border-radius: 14px; padding: 1.25rem; border: 1px solid #e5e7eb; }
+    .metric-label { font-size: 12px; color: #6b7280; margin-bottom: 4px; }
+    .metric-value { font-size: 28px; font-weight: 700; color: #111; }
+    .metric-sub { font-size: 11px; color: #9ca3af; margin-top: 2px; }
+    .card-title { font-size: 14px; font-weight: 600; color: #111; margin-bottom: 1rem; }
+    .alumno-fila { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #f3f4f6; font-size: 13px; }
+    .alumno-fila:last-child { border-bottom: none; }
+    .alumno-nombre { font-weight: 500; color: #111; }
+    .alumno-ppm { font-size: 12px; color: #6b7280; }
+    .badge { font-size: 11px; padding: 3px 10px; border-radius: 20px; font-weight: 500; }
+    .badge-ok { background: #d1fae5; color: #065f46; }
+    .badge-warn { background: #fef9c3; color: #854d0e; }
+    .badge-bad { background: #fee2e2; color: #991b1b; }
+    .error-fila { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f3f4f6; font-size: 13px; }
+    .error-fila:last-child { border-bottom: none; }
+    .barra-wrap { background: #f3f4f6; border-radius: 4px; height: 8px; width: 120px; overflow: hidden; }
+    .barra-fill { height: 100%; border-radius: 4px; }
+    .loading { text-align: center; color: #9ca3af; font-size: 14px; padding: 2rem; }
+    @media (max-width: 600px) { .grid-4 { grid-template-columns: 1fr 1fr; } .grid-2 { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+
+<h1>📊 Panel del Docente</h1>
+<p class="subtitle">LectorIA — Seguimiento de velocidad lectora</p>
+
+<div class="grid-4">
+  <div class="card">
+    <div class="metric-label">PPM medio clase</div>
+    <div class="metric-value" id="ppm-medio">—</div>
+    <div class="metric-sub">palabras por minuto</div>
+  </div>
+  <div class="card">
+    <div class="metric-label">Precisión media</div>
+    <div class="metric-value" id="prec-media">—</div>
+    <div class="metric-sub">% de acierto</div>
+  </div>
+  <div class="card">
+    <div class="metric-label">Total sesiones</div>
+    <div class="metric-value" id="total-sesiones">—</div>
+    <div class="metric-sub">lecturas completadas</div>
+  </div>
+  <div class="card">
+    <div class="metric-label">Alumnos activos</div>
+    <div class="metric-value" id="alumnos-activos">—</div>
+    <div class="metric-sub">han leído al menos 1 vez</div>
+  </div>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <div class="card-title">Evolución PPM de la clase</div>
+    <canvas id="chartPPM" height="200"></canvas>
+  </div>
+  <div class="card">
+    <div class="card-title">Alumnos — última sesión</div>
+    <div id="lista-alumnos"><div class="loading">Cargando...</div></div>
+  </div>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <div class="card-title">Tipos de errores acumulados</div>
+    <div id="lista-errores"><div class="loading">Cargando...</div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Distribución PPM actual</div>
+    <canvas id="chartDistribucion" height="200"></canvas>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = "https://mvwuyxrlkyikfgxzokxv.supabase.co";
+const SUPABASE_KEY = "sb_publishable_SNSZe5l2R3jcxiHxcxEqgg_XBrW-Xvi";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+async function cargarDatos() {
+  const { data, error } = await sb.from("sesiones").select("*").order("fecha", { ascending: true });
+  if (error || !data || data.length === 0) {
+    document.getElementById("lista-alumnos").innerHTML = "<div class='loading'>No hay sesiones todavía</div>";
+    return;
+  }
+
+  // Métricas generales
+  const ppmMedio = Math.round(data.reduce((s, r) => s + r.ppm, 0) / data.length);
+  const precMedia = Math.round(data.reduce((s, r) => s + r.precision, 0) / data.length);
+  const alumnos = [...new Set(data.map(r => r.alumno))];
+  document.getElementById("ppm-medio").textContent = ppmMedio;
+  document.getElementById("prec-media").textContent = precMedia + "%";
+  document.getElementById("total-sesiones").textContent = data.length;
+  document.getElementById("alumnos-activos").textContent = alumnos.length;
+
+  // Gráfica evolución PPM
+  const labels = data.map(r => new Date(r.fecha).toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit" }));
+  const ppms = data.map(r => r.ppm);
+  new Chart(document.getElementById("chartPPM"), {
+    type: "line",
+    data: {
+      labels,
+      datasets: [{
+        label: "PPM",
+        data: ppms,
+        borderColor: "#10b981",
+        backgroundColor: "rgba(16,185,129,0.08)",
+        borderWidth: 2,
+        pointRadius: 4,
+        fill: true,
+        tension: 0.35
+      }, {
+        label: "Objetivo 2º",
+        data: Array(labels.length).fill(90),
+        borderColor: "#d1d5db",
+        borderWidth: 1.5,
+        borderDash: [5, 4],
+        pointRadius: 0,
+        fill: false
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { min: 40, max: 140, ticks: { font: { size: 11 } }, grid: { color: "rgba(0,0,0,0.05)" } },
+        x: { ticks: { font: { size: 11 } }, grid: { display: false } }
+      }
+    }
+  });
+
+  // Lista alumnos última sesión
+  const ultimasSesiones = {};
+  data.forEach(r => { ultimasSesiones[r.alumno] = r; });
+  const listaHTML = Object.values(ultimasSesiones).map(r => {
+    const badge = r.ppm >= 90 ? "badge-ok" : r.ppm >= 70 ? "badge-warn" : "badge-bad";
+    const texto = r.ppm >= 90 ? "En nivel" : r.ppm >= 70 ? "Cerca" : "Necesita apoyo";
+    return `
+      <div class="alumno-fila">
+        <div>
+          <div class="alumno-nombre">${r.alumno}</div>
+          <div class="alumno-ppm">${r.ppm} PPM · ${r.precision}% precisión</div>
+        </div>
+        <span class="badge ${badge}">${texto}</span>
+      </div>`;
+  }).join("");
+  document.getElementById("lista-alumnos").innerHTML = listaHTML;
+
+  // Errores acumulados
+  const totalOmisiones = data.reduce((s, r) => s + r.omisiones, 0);
+  const totalSustituciones = data.reduce((s, r) => s + r.sustituciones, 0);
+  const totalRepeticiones = data.reduce((s, r) => s + r.repeticiones, 0);
+  const totalErrores = totalOmisiones + totalSustituciones + totalRepeticiones || 1;
+  document.getElementById("lista-errores").innerHTML = `
+    <div class="error-fila">
+      <span>Omisiones</span>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div class="barra-wrap"><div class="barra-fill" style="width:${(totalOmisiones/totalErrores)*100}%;background:#fca5a5"></div></div>
+        <span style="font-size:12px;color:#6b7280">${totalOmisiones}</span>
+      </div>
+    </div>
+    <div class="error-fila">
+      <span>Sustituciones</span>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div class="barra-wrap"><div class="barra-fill" style="width:${(totalSustituciones/totalErrores)*100}%;background:#fde68a"></div></div>
+        <span style="font-size:12px;color:#6b7280">${totalSustituciones}</span>
+      </div>
+    </div>
+    <div class="error-fila">
+      <span>Repeticiones</span>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div class="barra-wrap"><div class="barra-fill" style="width:${(totalRepeticiones/totalErrores)*100}%;background:#ddd6fe"></div></div>
+        <span style="font-size:12px;color:#6b7280">${totalRepeticiones}</span>
+      </div>
+    </div>`;
+
+  // Gráfica distribución PPM
+  const rangos = { "40-60": 0, "60-80": 0, "80-100": 0, "100+": 0 };
+  data.forEach(r => {
+    if (r.ppm < 60) rangos["40-60"]++;
+    else if (r.ppm < 80) rangos["60-80"]++;
+    else if (r.ppm < 100) rangos["80-100"]++;
+    else rangos["100+"]++;
+  });
+  new Chart(document.getElementById("chartDistribucion"), {
+    type: "bar",
+    data: {
+      labels: Object.keys(rangos),
+      datasets: [{
+        data: Object.values(rangos),
+        backgroundColor: ["#fca5a5", "#fde68a", "#86efac", "#6ee7b7"],
+        borderRadius: 6
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { ticks: { stepSize: 1, font: { size: 11 } }, grid: { color: "rgba(0,0,0,0.05)" } },
+        x: { ticks: { font: { size: 11 } }, grid: { display: false } }
+      }
+    }
+  });
+}
+
+cargarDatos();
+</script>
+</body>
+</html>
