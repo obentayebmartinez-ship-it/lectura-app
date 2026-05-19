@@ -127,6 +127,13 @@
 </div>
 
 <script>
+    // Recoger alumno desde el panel
+const alumnoGuardado = localStorage.getItem("alumno_nombre");
+const cursoGuardado = localStorage.getItem("alumno_curso");
+if (alumnoGuardado) {
+  document.getElementById("alumno").value = alumnoGuardado;
+  document.getElementById("alumno").readOnly = true;
+}
 const SUPABASE_URL = "https://mvwuyxrlkyikfgxzokxv.supabase.co";
 const SUPABASE_KEY = "sb_publishable_SNSZe5l2R3jcxiHxcxEqgg_XBrW-Xvi";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
