@@ -12,18 +12,17 @@
     .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
     .brand { font-size: 15px; font-weight: 500; color: #111; display: flex; align-items: center; gap: 8px; }
     .brand-dot { width: 8px; height: 8px; border-radius: 50%; background: #1D9E75; }
-    .back-btn { font-size: 12px; color: #6b7280; border: 0.5px solid #d1d5db; border-radius: 8px; padding: 5px 12px; background: transparent; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+    .back-btn { font-size: 12px; color: #6b7280; border: 0.5px solid #d1d5db; border-radius: 8px; padding: 5px 12px; background: transparent; cursor: pointer; }
     .api-box { background: #fefce8; border: 0.5px solid #fde047; border-radius: 12px; padding: 0.875rem 1rem; margin-bottom: 1rem; }
     .api-box label { font-size: 11px; color: #854d0e; font-weight: 500; display: block; margin-bottom: 4px; }
     .api-box input { width: 100%; padding: 7px 10px; border-radius: 8px; border: 0.5px solid #e5e7eb; font-size: 13px; background: #fff; color: #111; outline: none; }
     .alumno-card { display: flex; align-items: center; gap: 12px; background: #f5f5f0; border-radius: 12px; padding: 0.875rem 1rem; margin-bottom: 1.25rem; }
     .avatar { width: 40px; height: 40px; border-radius: 50%; background: #E1F5EE; display: flex; align-items: center; justify-content: center; font-weight: 500; font-size: 13px; color: #0F6E56; flex-shrink: 0; }
     .alumno-info { flex: 1; }
-    .alumno-nombre { font-size: 14px; font-weight: 500; color: #111; }
-    .alumno-sub { font-size: 11px; color: #6b7280; margin-top: 1px; }
-    .nivel-badge { font-size: 11px; background: #E1F5EE; color: #0F6E56; padding: 3px 10px; border-radius: 20px; font-weight: 500; white-space: nowrap; }
     .alumno-input { width: 100%; padding: 0; border: none; background: transparent; font-size: 14px; font-weight: 500; color: #111; outline: none; }
     .alumno-input::placeholder { color: #9ca3af; font-weight: 400; }
+    .alumno-sub { font-size: 11px; color: #6b7280; margin-top: 1px; }
+    .nivel-badge { font-size: 11px; background: #E1F5EE; color: #0F6E56; padding: 3px 10px; border-radius: 20px; font-weight: 500; white-space: nowrap; }
     .mascot { text-align: center; font-size: 36px; margin-bottom: 0.25rem; }
     .mascot-msg { text-align: center; font-size: 13px; color: #6b7280; margin-bottom: 1.25rem; }
     .texto-card { border: 0.5px solid #e5e7eb; border-radius: 14px; padding: 1.25rem; margin-bottom: 1rem; background: #fff; }
@@ -75,17 +74,14 @@
 </head>
 <body>
 <div class="screen">
-
   <div class="header">
     <div class="brand"><div class="brand-dot"></div>LectorIA</div>
     <button class="back-btn" onclick="window.location.href='panel.html'">← Panel</button>
   </div>
-
   <div class="api-box">
     <label>API key de OpenAI</label>
     <input type="password" id="apikey" placeholder="sk-..." />
   </div>
-
   <div class="alumno-card">
     <div class="avatar" id="avatar">?</div>
     <div class="alumno-info">
@@ -94,10 +90,8 @@
     </div>
     <span class="nivel-badge" id="nivel-badge">—</span>
   </div>
-
   <div class="mascot" id="mascot">📖</div>
   <div class="mascot-msg" id="msg">Lee el texto en voz alta cuando estés listo</div>
-
   <div class="texto-card">
     <div class="texto-meta">
       <span class="materia-badge" id="materia-badge">—</span>
@@ -110,18 +104,14 @@
     </div>
     <div class="reading" id="texto"></div>
   </div>
-
   <div class="prog-wrap"><div class="prog-fill" id="prog" style="width:0%"></div></div>
   <div class="prog-label" id="prog-label">0 palabras</div>
-
   <div class="stats">
     <div class="stat"><div class="stat-n" id="ppm">—</div><div class="stat-l">palabras/min</div></div>
     <div class="stat"><div class="stat-n" id="tiempo">0s</div><div class="stat-l">tiempo</div></div>
     <div class="stat"><div class="stat-n" id="errores">0</div><div class="stat-l">errores</div></div>
   </div>
-
   <button class="btn idle" id="btn" onclick="toggleLectura()">🎤 Pulsa para leer</button>
-
   <div class="result" id="result">
     <div class="result-header">
       <span style="font-size:18px">⭐</span>
@@ -144,32 +134,10 @@
 </div>
 
 <script>
-const alumnoGuardado = localStorage.getItem("alumno_nombre");
-const cursoGuardado = localStorage.getItem("alumno_curso");
-if (alumnoGuardado) {
-  document.getElementById("alumno").value = alumnoGuardado;
-  document.getElementById("alumno").readOnly = true;
-  const iniciales = alumnoGuardado.split(" ").map(n => n[0]).join("").substring(0,2).toUpperCase();
-  document.getElementById("avatar").textContent = iniciales;
-}
-if (cursoGuardado) {
-  document.getElementById("nivel-badge").textContent = cursoGuardado;
-}
-
-const keyGuardada = localStorage.getItem("openai_key");
-if (keyGuardada) document.getElementById("apikey").value = keyGuardada;
-
-document.getElementById("alumno").addEventListener("input", function() {
-  const val = this.value.trim();
-  const iniciales = val.split(" ").map(n => n[0]).filter(Boolean).join("").substring(0,2).toUpperCase();
-  document.getElementById("avatar").textContent = iniciales || "?";
-});
-
 const SUPABASE_URL = "https://mvwuyxrlkyikfgxzokxv.supabase.co";
 const SUPABASE_KEY = "sb_publishable_SNSZe5l2R3jcxiHxcxEqgg_XBrW-Xvi";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const lecturas = [
 const lecturas = {
   "1P": [
     { id: "1p-01", titulo: "Los animales domésticos", materia: "Ciencias Naturales", texto: "Los animales domésticos viven con las personas en casa. El perro y el gato son los más comunes. El perro ladra y el gato maúlla. Necesitan comida, agua y cariño cada día. Algunos animales domésticos nos ayudan, como el perro guía que acompaña a personas con problemas de visión. Debemos cuidarlos y quererlos siempre." },
@@ -197,31 +165,36 @@ const lecturas = {
   ]
 };
 
+const alumnoGuardado = localStorage.getItem("alumno_nombre") || "";
 const cursoAlumno = localStorage.getItem("alumno_curso") || "2P";
-const alumnoNombre = localStorage.getItem("alumno_nombre") || "";
-const lecturasDelCurso = lecturas[cursoAlumno] || lecturas["2P"];
+const keyGuardada = localStorage.getItem("openai_key");
 
-// Determinar qué lectura le toca — la siguiente que no ha hecho
-const sesionesAlumno = JSON.parse(localStorage.getItem("sesiones_" + alumnoNombre) || "[]");
+if (alumnoGuardado) {
+  document.getElementById("alumno").value = alumnoGuardado;
+  document.getElementById("alumno").readOnly = true;
+  const iniciales = alumnoGuardado.split(" ").map(n => n[0]).filter(Boolean).join("").substring(0,2).toUpperCase();
+  document.getElementById("avatar").textContent = iniciales;
+}
+if (keyGuardada) document.getElementById("apikey").value = keyGuardada;
+
+document.getElementById("alumno").addEventListener("input", function() {
+  const val = this.value.trim();
+  const iniciales = val.split(" ").map(n => n[0]).filter(Boolean).join("").substring(0,2).toUpperCase();
+  document.getElementById("avatar").textContent = iniciales || "?";
+});
+
+const lecturasDelCurso = lecturas[cursoAlumno] || lecturas["2P"];
+const sesionesAlumno = JSON.parse(localStorage.getItem("sesiones_" + alumnoGuardado) || "[]");
 const lecturasHechas = new Set(sesionesAlumno.map(s => s.texto_id));
 const lecturaPendiente = lecturasDelCurso.find(l => !lecturasHechas.has(l.id));
 const lecturaActual = lecturaPendiente || lecturasDelCurso[0];
-
-const textOriginal = lecturaActual.texto;
-const palabras = textOriginal.split(" ");
-document.getElementById("materia-badge").textContent = lecturaActual.materia;
-document.getElementById("palabras-count").textContent = palabras.length + " palabras";
-
-// Mostrar número de lectura
 const numLectura = lecturasDelCurso.findIndex(l => l.id === lecturaActual.id) + 1;
-document.getElementById("nivel-badge").textContent = `Lectura ${numLectura}/${lecturasDelCurso.length}`;
 
-const cursoAlumno = localStorage.getItem("alumno_curso") || "2P";
-const lecturasDelCurso = lecturas.filter(l => l.curso === cursoAlumno);
-const lecturaActual = lecturasDelCurso[Math.floor(Math.random() * lecturasDelCurso.length)];
+document.getElementById("nivel-badge").textContent = "Lectura " + numLectura + "/" + lecturasDelCurso.length;
+document.getElementById("materia-badge").textContent = lecturaActual.materia;
+
 const textOriginal = lecturaActual.texto;
 const palabras = textOriginal.split(" ");
-document.getElementById("materia-badge").textContent = lecturaActual.materia;
 document.getElementById("palabras-count").textContent = palabras.length + " palabras";
 
 const texto = document.getElementById("texto");
@@ -422,9 +395,11 @@ async function procesarResultado(transcripcion, words = [], segmentos = []) {
   document.getElementById("mascot").textContent = "⭐";
   document.getElementById("msg").textContent = "¡Genial! Mira tus resultados";
   document.getElementById("result").classList.add("show");
+
   const sesionesLocal = JSON.parse(localStorage.getItem("sesiones_" + alumno) || "[]");
-sesionesLocal.push({ texto_id: lecturaActual.id, ppm: ppmFinal, fecha: new Date().toISOString() });
-localStorage.setItem("sesiones_" + alumno, JSON.stringify(sesionesLocal));
+  sesionesLocal.push({ texto_id: lecturaActual.id, ppm: ppmFinal, fecha: new Date().toISOString() });
+  localStorage.setItem("sesiones_" + alumno, JSON.stringify(sesionesLocal));
+
   const { error } = await sb.from("sesiones").insert({
     alumno, fecha: new Date().toISOString(), ppm: ppmFinal, precision: precFinal,
     omisiones, sustituciones, repeticiones: reps, vacilaciones: vacs, texto_id: lecturaActual.id
