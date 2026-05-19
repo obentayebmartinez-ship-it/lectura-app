@@ -191,8 +191,8 @@ const cursoAlumno = localStorage.getItem("alumno_curso") || "2P";
 const lecturasDelCurso = lecturas.filter(l => l.curso === cursoAlumno);
 const lecturaActual = lecturasDelCurso[Math.floor(Math.random() * lecturasDelCurso.length)];
 const textOriginal = lecturaActual.texto;
-const palabras = textOriginal.split("document.getElementById("text-meta").textContent = lecturaActual.titulo + " — " + lecturaActual.materia + " · " + palabras.length + " palabras"; ");
-
+const palabras = textOriginal.split(" ");
+document.getElementById("text-meta").textContent = lecturaActual.titulo + " — " + lecturaActual.materia + " · " + palabras.length + " palabras";
 const texto = document.getElementById("texto");
 palabras.forEach((p, i) => {
   const span = document.createElement("span");
