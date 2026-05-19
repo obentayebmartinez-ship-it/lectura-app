@@ -130,71 +130,37 @@
 </div>
 
 <script>
-    // Recoger alumno desde el panel
+// Recoger alumno desde el panel
 const alumnoGuardado = localStorage.getItem("alumno_nombre");
 const cursoGuardado = localStorage.getItem("alumno_curso");
 if (alumnoGuardado) {
   document.getElementById("alumno").value = alumnoGuardado;
   document.getElementById("alumno").readOnly = true;
 }
+
+const keyGuardada = localStorage.getItem("openai_key");
+if (keyGuardada) document.getElementById("apikey").value = keyGuardada;
+
 const SUPABASE_URL = "https://mvwuyxrlkyikfgxzokxv.supabase.co";
 const SUPABASE_KEY = "sb_publishable_SNSZe5l2R3jcxiHxcxEqgg_XBrW-Xvi";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const lecturas = [
-  {
-    id: "animales-1p",
-    titulo: "Los animales domésticos",
-    materia: "Ciencias Naturales",
-    curso: "1P",
-    texto: "Los animales domésticos viven con las personas en casa. El perro y el gato son los más comunes. El perro ladra y el gato maúlla. Necesitan comida, agua y cariño cada día. Algunos animales domésticos nos ayudan, como el perro guía que acompaña a personas con problemas de visión. Debemos cuidarlos y quererlos siempre."
-  },
-  {
-    id: "familia-1p",
-    titulo: "Mi familia",
-    materia: "Lengua",
-    curso: "1P",
-    texto: "En mi familia somos cuatro personas. Mi papá se llama Carlos y trabaja de médico. Mi mamá se llama Ana y es maestra. Mi hermana pequeña se llama Lucía y tiene tres años. Los fines de semana salimos juntos al parque. Me gusta mucho estar con mi familia porque nos queremos mucho."
-  },
-  {
-    id: "frutas-1p",
-    titulo: "Las frutas",
-    materia: "Entorno",
-    curso: "1P",
-    texto: "Las frutas son alimentos muy sanos y deliciosos. Las hay de muchos colores: las manzanas son rojas o verdes, los plátanos son amarillos y las naranjas son naranjas. Tienen vitaminas que nos ayudan a crecer sanos y fuertes. Debemos comer fruta todos los días. En España se cultivan muchas frutas como naranjas, fresas y melones."
-  },
-  {
-    id: "abejas-2p",
-    titulo: "Las abejas",
-    materia: "Ciencias Naturales",
-    curso: "2P",
-    texto: "Las abejas son insectos que viven en colonias. Dentro de la colmena trabajan juntas para producir miel. La abeja reina pone huevos y las obreras cuidan la colmena. Recogen el néctar de las flores y lo transforman en miel. También ayudan a las plantas a reproducirse cuando llevan el polen de unas flores a otras."
-  },
-  {
-    id: "agua-2p",
-    titulo: "El agua",
-    materia: "Ciencias Naturales",
-    curso: "2P",
-    texto: "El agua es un elemento muy importante para todos los seres vivos. Las personas, los animales y las plantas necesitan agua para vivir. El agua que bebemos viene de los ríos y los embalses. Antes de llegar a nuestra casa se limpia en las potabilizadoras. Debemos ahorrar agua y no malgastarla. Podemos cerrar el grifo mientras nos lavamos los dientes. El agua es un bien muy valioso que hay que cuidar."
-  },
-  {
-    id: "mercado-2p",
-    titulo: "El mercado",
-    materia: "Matemáticas",
-    curso: "2P",
-    texto: "En el mercado se venden muchos productos diferentes. Hay puestos de frutas, verduras, carne y pescado. Los vendedores pesan los alimentos con una balanza. Si compras un kilo de manzanas y otro de peras, llevas dos kilos en total. Cuando pagas, el vendedor te da el cambio. Si das cinco euros y la compra vale tres, te devuelven dos euros. Ir al mercado es aprender matemáticas sin darse cuenta."
-  }
+  { id: "animales-1p", titulo: "Los animales domésticos", materia: "Ciencias Naturales", curso: "1P", texto: "Los animales domésticos viven con las personas en casa. El perro y el gato son los más comunes. El perro ladra y el gato maúlla. Necesitan comida, agua y cariño cada día. Algunos animales domésticos nos ayudan, como el perro guía que acompaña a personas con problemas de visión. Debemos cuidarlos y quererlos siempre." },
+  { id: "familia-1p", titulo: "Mi familia", materia: "Lengua", curso: "1P", texto: "En mi familia somos cuatro personas. Mi papá se llama Carlos y trabaja de médico. Mi mamá se llama Ana y es maestra. Mi hermana pequeña se llama Lucía y tiene tres años. Los fines de semana salimos juntos al parque. Me gusta mucho estar con mi familia porque nos queremos mucho." },
+  { id: "frutas-1p", titulo: "Las frutas", materia: "Entorno", curso: "1P", texto: "Las frutas son alimentos muy sanos y deliciosos. Las hay de muchos colores: las manzanas son rojas o verdes, los plátanos son amarillos y las naranjas son naranjas. Tienen vitaminas que nos ayudan a crecer sanos y fuertes. Debemos comer fruta todos los días. En España se cultivan muchas frutas como naranjas, fresas y melones." },
+  { id: "abejas-2p", titulo: "Las abejas", materia: "Ciencias Naturales", curso: "2P", texto: "Las abejas son insectos que viven en colonias. Dentro de la colmena trabajan juntas para producir miel. La abeja reina pone huevos y las obreras cuidan la colmena. Recogen el néctar de las flores y lo transforman en miel. También ayudan a las plantas a reproducirse cuando llevan el polen de unas flores a otras." },
+  { id: "agua-2p", titulo: "El agua", materia: "Ciencias Naturales", curso: "2P", texto: "El agua es un elemento muy importante para todos los seres vivos. Las personas, los animales y las plantas necesitan agua para vivir. El agua que bebemos viene de los ríos y los embalses. Antes de llegar a nuestra casa se limpia en las potabilizadoras. Debemos ahorrar agua y no malgastarla. Podemos cerrar el grifo mientras nos lavamos los dientes. El agua es un bien muy valioso que hay que cuidar." },
+  { id: "mercado-2p", titulo: "El mercado", materia: "Matemáticas", curso: "2P", texto: "En el mercado se venden muchos productos diferentes. Hay puestos de frutas, verduras, carne y pescado. Los vendedores pesan los alimentos con una balanza. Si compras un kilo de manzanas y otro de peras, llevas dos kilos en total. Cuando pagas, el vendedor te da el cambio. Si das cinco euros y la compra vale tres, te devuelven dos euros. Ir al mercado es aprender matemáticas sin darse cuenta." }
 ];
 
-// Elegir lectura según curso del alumno
 const cursoAlumno = localStorage.getItem("alumno_curso") || "2P";
-const keyGuardada = localStorage.getItem("openai_key");
-if (keyGuardada) document.getElementById("apikey").value = keyGuardada;
 const lecturasDelCurso = lecturas.filter(l => l.curso === cursoAlumno);
 const lecturaActual = lecturasDelCurso[Math.floor(Math.random() * lecturasDelCurso.length)];
 const textOriginal = lecturaActual.texto;
 const palabras = textOriginal.split(" ");
 document.getElementById("text-meta").textContent = lecturaActual.titulo + " — " + lecturaActual.materia + " · " + palabras.length + " palabras";
+
 const texto = document.getElementById("texto");
 palabras.forEach((p, i) => {
   const span = document.createElement("span");
@@ -214,10 +180,9 @@ function toggleLectura() {
 }
 
 async function iniciar() {
-    const apikey = document.getElementById("apikey").value.trim();
-if (!apikey) { alert("Introduce tu API key de OpenAI primero"); return; }
-localStorage.setItem("openai_key", apikey);
+  const apikey = document.getElementById("apikey").value.trim();
   if (!apikey) { alert("Introduce tu API key de OpenAI primero"); return; }
+  localStorage.setItem("openai_key", apikey);
   const alumno = document.getElementById("alumno").value.trim();
   if (!alumno) { alert("Introduce el nombre del alumno primero"); return; }
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -250,24 +215,21 @@ async function parar() {
 
   mediaRecorder.onstop = async () => {
     const blob = new Blob(audioChunks, { type: "audio/webm" });
-const formData = new FormData();
-formData.append("file", blob, "lectura.webm");
-formData.append("model", "whisper-1");
-formData.append("language", "es");
-formData.append("prompt", textOriginal);
-formData.append("temperature", "0");
-formData.append("response_format", "verbose_json");
-const apikey = document.getElementById("apikey").value.trim();
-localStorage.setItem("openai_key", apikey);
-const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
-  method: "POST",
-  headers: { "Authorization": "Bearer " + apikey },
-  body: formData
-});
-const data = await res.json();
-const transcripcion = data.text || "";
-const segmentos = data.segments || [];
-procesarResultado(transcripcion, segmentos);
+    const formData = new FormData();
+    formData.append("file", blob, "lectura.webm");
+    formData.append("model", "whisper-1");
+    formData.append("language", "es");
+    formData.append("prompt", textOriginal);
+    formData.append("temperature", "0");
+    formData.append("response_format", "verbose_json");
+    const apikey = document.getElementById("apikey").value.trim();
+    const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+      method: "POST",
+      headers: { "Authorization": "Bearer " + apikey },
+      body: formData
+    });
+    const data = await res.json();
+    procesarResultado(data.text || "", data.segments || []);
   };
 }
 
@@ -302,21 +264,22 @@ function detectarRepeticiones(leidas) {
   return repetidas;
 }
 
-async function procesarResultado(transcripcion) {
+async function procesarResultado(transcripcion, segmentos = []) {
   const leidas = transcripcion.split(/\s+/).filter(w => w.length > 0);
-  // Detectar vacilaciones por pausas largas entre palabras
-const vacilaciones = new Set();
-if (segmentos.length > 0) {
-  segmentos.forEach(seg => {
-    if (seg.words) {
-      seg.words.forEach((w, i) => {
-        if (i > 0 && w.start - seg.words[i-1].end > 1.5) {
-          vacilaciones.add(normalizar(w.word));
-        }
-      });
-    }
-  });
-}
+
+  const vacilaciones = new Set();
+  if (segmentos.length > 0) {
+    segmentos.forEach(seg => {
+      if (seg.words) {
+        seg.words.forEach((w, i) => {
+          if (i > 0 && w.start - seg.words[i-1].end > 1.5) {
+            vacilaciones.add(normalizar(w.word));
+          }
+        });
+      }
+    });
+  }
+
   const repetidas = detectarRepeticiones(leidas);
   const erroresDetalle = [];
   let omisiones = 0, sustituciones = 0, reps = 0, totalErrores = 0, coincidencias = 0;
@@ -392,7 +355,7 @@ if (segmentos.length > 0) {
     omisiones: omisiones,
     sustituciones: sustituciones,
     repeticiones: reps,
-    texto_id: "abejas-2b"
+    texto_id: lecturaActual.id
   });
 
   if (!error) {
