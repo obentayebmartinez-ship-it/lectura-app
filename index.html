@@ -18,7 +18,6 @@
     .reading { font-size: 20px; line-height: 2; color: #111; }
     .word { display: inline; border-radius: 4px; padding: 1px 2px; transition: all 0.15s; }
     .word.done { color: #9ca3af; }
-    .word.current { background: #fde68a; color: #78350f; padding: 1px 4px; }
     .word.error { background: #fee2e2; color: #991b1b; padding: 1px 4px; }
     .prog-wrap { background: #f3f4f6; border-radius: 8px; height: 8px; margin-bottom: 4px; overflow: hidden; }
     .prog-fill { height: 100%; border-radius: 8px; background: #10b981; transition: width 0.3s; }
@@ -40,10 +39,19 @@
     .result-item { background: white; border-radius: 8px; padding: 10px; text-align: center; }
     .result-n { font-size: 22px; font-weight: 600; color: #166534; }
     .result-l { font-size: 10px; color: #4ade80; }
+    .api-box { background: #fefce8; border: 1px solid #fde047; border-radius: 12px; padding: 1rem; margin-bottom: 1rem; }
+    .api-box input { width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid #e5e7eb; font-size: 13px; margin-top: 6px; }
+    .api-box label { font-size: 12px; color: #854d0e; font-weight: 500; }
   </style>
 </head>
 <body>
 <div class="screen">
+
+  <div class="api-box">
+    <label>🔑 Tu API key de OpenAI</label>
+    <input type="password" id="apikey" placeholder="sk-..." />
+  </div>
+
   <div class="top">
     <div style="display:flex;align-items:center;gap:10px;">
       <div class="avatar">AL</div>
@@ -84,7 +92,8 @@
 </div>
 
 <script>
-const palabras = "Las abejas son insectos que viven en colonias. Dentro de la colmena trabajan juntas para producir miel. La abeja reina pone huevos y las obreras cuidan la colmena. Recogen el néctar de las flores y lo transforman en miel.".split(" ");
+const textOriginal = "Las abejas son insectos que viven en colonias. Dentro de la colmena trabajan juntas para producir miel. La abeja reina pone huevos y las obreras cuidan la colmena. Recogen el néctar de las flores y lo transforman en miel.";
+const palabras = textOriginal.split(" ");
 
 const texto = document.getElementById("texto");
 palabras.forEach((p, i) => {
@@ -96,14 +105,26 @@ palabras.forEach((p, i) => {
 });
 
 let grabando = false;
-let timer, simTimer, segundos = 0, idx = 0, errores = 0;
+let mediaRecorder, audioChunks = [];
+let timer, segundos = 0, errores = 0;
+let inicio;
 
 function toggleLectura() {
   if (!grabando) iniciar(); else parar();
 }
 
-function iniciar() {
+async function iniciar() {
+  const apikey = document.getElementById("apikey").value.trim();
+  if (!apikey) { alert("Introduce tu API key de OpenAI primero"); return; }
+
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  mediaRecorder = new MediaRecorder(stream);
+  audioChunks = [];
+  mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+  mediaRecorder.start();
+
   grabando = true;
+  inicio = Date.now();
   const btn = document.getElementById("btn");
   btn.className = "btn recording";
   btn.textContent = "⏹ Leyendo... pulsa para terminar";
@@ -111,45 +132,76 @@ function iniciar() {
   document.getElementById("msg").textContent = "¡Te escucho! Sigue leyendo...";
 
   timer = setInterval(() => {
-    segundos++;
+    segundos = Math.round((Date.now() - inicio) / 1000);
     document.getElementById("tiempo").textContent = segundos + "s";
-    if (segundos > 2 && idx > 0) {
-      document.getElementById("ppm").textContent = Math.round((idx / segundos) * 60);
-    }
   }, 1000);
-
-  simTimer = setInterval(() => {
-    if (idx < palabras.length) {
-      if (idx > 0) document.getElementById("w"+(idx-1)).className = "word done";
-      const w = document.getElementById("w"+idx);
-      // simula un error aleatorio ocasional
-      if (Math.random() < 0.08) { w.className = "word error"; errores++; document.getElementById("errores").textContent = errores; }
-      else w.className = "word current";
-      idx++;
-      const pct = Math.round((idx / palabras.length) * 100);
-      document.getElementById("prog").style.width = pct + "%";
-      document.getElementById("prog-label").textContent = idx + " de " + palabras.length + " palabras";
-    } else {
-      parar();
-    }
-  }, 300);
 }
 
-function parar() {
+async function parar() {
   grabando = false;
-  clearInterval(timer); clearInterval(simTimer);
-  palabras.forEach((_, i) => { const w = document.getElementById("w"+i); if (!w.classList.contains("error")) w.className = "word done"; });
+  clearInterval(timer);
+  mediaRecorder.stop();
+
+  document.getElementById("btn").className = "btn finished";
+  document.getElementById("btn").textContent = "⏳ Analizando...";
+  document.getElementById("btn").disabled = true;
+  document.getElementById("mascot").textContent = "🔍";
+  document.getElementById("msg").textContent = "Analizando tu lectura...";
+
+  mediaRecorder.onstop = async () => {
+    const blob = new Blob(audioChunks, { type: "audio/webm" });
+    const formData = new FormData();
+    formData.append("file", blob, "lectura.webm");
+    formData.append("model", "whisper-1");
+    formData.append("language", "es");
+
+    const apikey = document.getElementById("apikey").value.trim();
+    const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+      method: "POST",
+      headers: { "Authorization": "Bearer " + apikey },
+      body: formData
+    });
+
+    const data = await res.json();
+    const transcripcion = data.text || "";
+    procesarResultado(transcripcion);
+  };
+}
+
+function normalizar(str) {
+  return str.toLowerCase().replace(/[.,;:!?¡¿]/g, "").trim();
+}
+
+function procesarResultado(transcripcion) {
+  const leidas = transcripcion.split(" ").map(normalizar).filter(w => w.length > 0);
+  errores = 0;
+  let coincidencias = 0;
+
+  palabras.forEach((p, i) => {
+    const orig = normalizar(p);
+    const span = document.getElementById("w" + i);
+    if (leidas.includes(orig)) {
+      span.className = "word done";
+      coincidencias++;
+    } else {
+      span.className = "word error";
+      errores++;
+    }
+  });
+
   document.getElementById("prog").style.width = "100%";
   document.getElementById("prog-label").textContent = palabras.length + " de " + palabras.length + " palabras";
+  document.getElementById("errores").textContent = errores;
+
   const ppmFinal = Math.round((palabras.length / segundos) * 60);
-  const precFinal = Math.round(((palabras.length - errores) / palabras.length) * 100);
-  document.getElementById("btn").className = "btn finished";
-  document.getElementById("btn").textContent = "✓ Lectura completada";
-  document.getElementById("btn").disabled = true;
-  document.getElementById("mascot").textContent = "🌟";
-  document.getElementById("msg").textContent = "¡Genial! Mira tus resultados";
+  const precFinal = Math.round((coincidencias / palabras.length) * 100);
+  document.getElementById("ppm").textContent = ppmFinal;
   document.getElementById("r-ppm").textContent = ppmFinal;
   document.getElementById("r-prec").textContent = precFinal + "%";
+
+  document.getElementById("btn").textContent = "✓ Lectura completada";
+  document.getElementById("mascot").textContent = "🌟";
+  document.getElementById("msg").textContent = "¡Genial! Mira tus resultados";
   document.getElementById("result").classList.add("show");
 }
 </script>
