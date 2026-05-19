@@ -116,11 +116,13 @@
   <div class="result" id="result">
     <div class="result-title">🌟 ¡Muy bien!</div>
     <div class="result-grid">
-      <div class="result-item"><div class="result-n" id="r-ppm">—</div><div class="result-l">palabras/min</div></div>
-      <div class="result-item"><div class="result-n" id="r-prec">—</div><div class="result-l">precisión</div></div>
-      <div class="result-item"><div class="result-n" id="r-omisiones">0</div><div class="result-l">omisiones</div></div>
-      <div class="result-item"><div class="result-n" id="r-sustituciones">0</div><div class="result-l">sustituciones</div></div>
-    </div>
+        <div class="result-item"><div class="result-n" id="r-ppm">—</div><div class="result-l">palabras/min</div></div>
+        <div class="result-item"><div class="result-n" id="r-prec">—</div><div class="result-l">precisión</div></div>
+        <div class="result-item"><div class="result-n" id="r-omisiones">0</div><div class="result-l">omisiones</div></div>
+        <div class="result-item"><div class="result-n" id="r-sustituciones">0</div><div class="result-l">sustituciones</div></div>
+        <div class="result-item"><div class="result-n" id="r-repeticiones">0</div><div class="result-l">repeticiones</div></div>
+        <div class="result-item"><div class="result-n" id="r-vacilaciones">0</div><div class="result-l">vacilaciones/silabeo</div></div>
+      </div>
     <div class="errores-detalle" id="detalle-errores" style="display:none">
       <div class="errores-titulo">Detalle de errores</div>
       <div id="lista-errores"></div>
@@ -383,6 +385,8 @@ async function procesarResultado(transcripcion, words = [], segmentos = []) {
   document.getElementById("r-prec").textContent = precFinal + "%";
   document.getElementById("r-omisiones").textContent = omisiones;
   document.getElementById("r-sustituciones").textContent = sustituciones;
+  document.getElementById("r-repeticiones").textContent = reps;
+document.getElementById("r-vacilaciones").textContent = vacs + posibleSilabeo;
 
   if (erroresDetalle.length > 0) {
     const lista = document.getElementById("lista-errores");
