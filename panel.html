@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LectorIA — Panel Docente</title>
+  <title>LectorIA — Panel</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -11,46 +11,50 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: system-ui, sans-serif; background: #f5f5f0; padding: 1.5rem; }
     .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-    .topbar-left h1 { font-size: 20px; font-weight: 700; color: #111; }
-    .topbar-left p { font-size: 13px; color: #6b7280; }
-    .btn-logout { font-size: 12px; padding: 6px 14px; border-radius: 8px; border: 1px solid #e5e7eb; background: white; color: #374151; cursor: pointer; }
-    .btn-logout:hover { background: #f9fafb; }
+    .brand { display: flex; align-items: center; gap: 8px; }
+    .brand-dot { width: 8px; height: 8px; border-radius: 50%; background: #1D9E75; }
+    .brand-name { font-size: 16px; font-weight: 500; color: #111; }
+    .user-info { font-size: 12px; color: #6b7280; margin-top: 2px; }
+    .btn-logout { font-size: 12px; padding: 6px 14px; border-radius: 8px; border: 0.5px solid #e5e7eb; background: #fff; color: #374151; cursor: pointer; }
     .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 1.5rem; }
     .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 1.5rem; }
-    .card { background: white; border-radius: 14px; padding: 1.25rem; border: 1px solid #e5e7eb; }
-    .metric-label { font-size: 12px; color: #6b7280; margin-bottom: 4px; }
-    .metric-value { font-size: 28px; font-weight: 700; color: #111; }
+    .card { background: #fff; border-radius: 14px; padding: 1.25rem; border: 0.5px solid #e5e7eb; }
+    .metric-label { font-size: 11px; color: #6b7280; margin-bottom: 4px; }
+    .metric-value { font-size: 26px; font-weight: 500; color: #111; }
     .metric-sub { font-size: 11px; color: #9ca3af; margin-top: 2px; }
-    .card-title { font-size: 14px; font-weight: 600; color: #111; margin-bottom: 1rem; }
-    .alumno-fila { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #f3f4f6; font-size: 13px; }
+    .card-title { font-size: 14px; font-weight: 500; color: #111; margin-bottom: 1rem; }
+    .add-alumno { display: flex; gap: 8px; margin-bottom: 1rem; flex-wrap: wrap; }
+    .add-alumno input, .add-alumno select { padding: 8px 12px; border-radius: 8px; border: 0.5px solid #e5e7eb; font-size: 13px; flex: 1; min-width: 120px; color: #111; outline: none; }
+    .add-alumno input:focus, .add-alumno select:focus { border-color: #1D9E75; }
+    .btn-add { padding: 8px 16px; border-radius: 8px; border: none; background: #1D9E75; color: #fff; font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+    .alumno-fila { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 0.5px solid #f3f4f6; font-size: 13px; }
     .alumno-fila:last-child { border-bottom: none; }
     .alumno-nombre { font-weight: 500; color: #111; }
-    .alumno-ppm { font-size: 12px; color: #6b7280; }
-    .badge { font-size: 11px; padding: 3px 10px; border-radius: 20px; font-weight: 500; }
-    .badge-ok { background: #d1fae5; color: #065f46; }
-    .badge-warn { background: #fef9c3; color: #854d0e; }
-    .badge-bad { background: #fee2e2; color: #991b1b; }
-    .error-fila { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f3f4f6; font-size: 13px; }
-    .error-fila:last-child { border-bottom: none; }
-    .barra-wrap { background: #f3f4f6; border-radius: 4px; height: 8px; width: 120px; overflow: hidden; }
-    .barra-fill { height: 100%; border-radius: 4px; }
-    .loading { text-align: center; color: #9ca3af; font-size: 14px; padding: 2rem; }
-    .btn-pdf { font-size: 11px; padding: 4px 10px; border-radius: 8px; border: 1px solid #d1d5db; background: white; color: #374151; cursor: pointer; margin-left: 8px; }
-    .btn-leer { font-size: 11px; padding: 4px 10px; border-radius: 8px; border: none; background: #10b981; color: white; cursor: pointer; }
+    .alumno-meta { font-size: 11px; color: #9ca3af; margin-top: 2px; }
     .alumno-derecha { display: flex; align-items: center; gap: 6px; }
-    .add-alumno { display: flex; gap: 8px; margin-bottom: 1rem; flex-wrap: wrap; }
-    .add-alumno input, .add-alumno select { padding: 8px 12px; border-radius: 8px; border: 1px solid #e5e7eb; font-size: 13px; flex: 1; min-width: 120px; }
-    .btn-add { padding: 8px 16px; border-radius: 8px; border: none; background: #10b981; color: white; font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; }
-    .lista-mis-alumnos .alumno-fila { cursor: default; }
-    @media (max-width: 600px) { .grid-4 { grid-template-columns: 1fr 1fr; } .grid-2 { grid-template-columns: 1fr; } }
+    .badge { font-size: 11px; padding: 3px 10px; border-radius: 20px; font-weight: 500; }
+    .badge-ok { background: #E1F5EE; color: #0F6E56; }
+    .badge-warn { background: #FAEEDA; color: #633806; }
+    .badge-bad { background: #FCEBEB; color: #791F1F; }
+    .btn-leer { font-size: 11px; padding: 5px 12px; border-radius: 8px; border: none; background: #1D9E75; color: #fff; cursor: pointer; }
+    .btn-pdf { font-size: 11px; padding: 5px 10px; border-radius: 8px; border: 0.5px solid #e5e7eb; background: #fff; color: #374151; cursor: pointer; }
+    .error-fila { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 0.5px solid #f3f4f6; font-size: 13px; color: #374151; }
+    .error-fila:last-child { border-bottom: none; }
+    .barra-wrap { background: #f3f4f6; border-radius: 4px; height: 6px; width: 100px; overflow: hidden; }
+    .barra-fill { height: 100%; border-radius: 4px; }
+    .loading { text-align: center; color: #9ca3af; font-size: 13px; padding: 2rem; }
+    @media (max-width: 700px) { .grid-4 { grid-template-columns: 1fr 1fr; } .grid-2 { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
 
 <div class="topbar">
-  <div class="topbar-left">
-    <h1>📊 Panel del Docente</h1>
-    <p id="user-email">Cargando...</p>
+  <div>
+    <div class="brand">
+      <div class="brand-dot"></div>
+      <span class="brand-name">LectorIA</span>
+    </div>
+    <div class="user-info" id="user-email">Cargando...</div>
   </div>
   <button class="btn-logout" onclick="cerrarSesion()">Cerrar sesión</button>
 </div>
@@ -93,7 +97,7 @@
       </select>
       <button class="btn-add" onclick="añadirAlumno()">+ Añadir</button>
     </div>
-    <div id="lista-mis-alumnos" class="lista-mis-alumnos"><div class="loading">Cargando alumnos...</div></div>
+    <div id="lista-mis-alumnos"><div class="loading">Cargando alumnos...</div></div>
   </div>
   <div class="card">
     <div class="card-title">Evolución PPM de la clase</div>
@@ -122,10 +126,8 @@ let sesionUsuario = null;
 
 async function init() {
   const { data } = await sb.auth.getSession();
-  if (!data.session) { 
-  console.log("sin sesion");
-  return; 
-}  sesionUsuario = data.session.user;
+  if (!data.session) { window.location.href = "login.html"; return; }
+  sesionUsuario = data.session.user;
   document.getElementById("user-email").textContent = sesionUsuario.user_metadata?.nombre || sesionUsuario.email;
   await cargarAlumnos();
   await cargarDatos();
@@ -157,7 +159,7 @@ async function cargarAlumnos() {
     <div class="alumno-fila">
       <div>
         <div class="alumno-nombre">${a.nombre}</div>
-        <div class="alumno-ppm">${a.curso}</div>
+        <div class="alumno-meta">${a.curso}</div>
       </div>
       <div class="alumno-derecha">
         <button class="btn-leer" onclick="irALectura('${a.nombre}', '${a.curso}')">▶ Leer</button>
@@ -189,17 +191,16 @@ async function cargarDatos() {
   document.getElementById("alumnos-activos").textContent = alumnos.length;
 
   const labels = data.map(r => new Date(r.fecha).toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit" }));
-  const ppms = data.map(r => r.ppm);
   new Chart(document.getElementById("chartPPM"), {
     type: "line",
     data: {
       labels,
       datasets: [{
-        data: ppms,
-        borderColor: "#10b981",
-        backgroundColor: "rgba(16,185,129,0.08)",
+        data: data.map(r => r.ppm),
+        borderColor: "#1D9E75",
+        backgroundColor: "rgba(29,158,117,0.08)",
         borderWidth: 2,
-        pointRadius: 4,
+        pointRadius: 3,
         fill: true,
         tension: 0.35
       }, {
@@ -215,8 +216,8 @@ async function cargarDatos() {
       responsive: true,
       plugins: { legend: { display: false } },
       scales: {
-        y: { min: 40, max: 140, ticks: { font: { size: 11 } }, grid: { color: "rgba(0,0,0,0.05)" } },
-        x: { ticks: { font: { size: 11 } }, grid: { display: false } }
+        y: { min: 40, max: 140, ticks: { font: { size: 11 }, color: "#9ca3af" }, grid: { color: "rgba(0,0,0,0.04)" } },
+        x: { ticks: { font: { size: 11 }, color: "#9ca3af" }, grid: { display: false } }
       }
     }
   });
@@ -230,7 +231,7 @@ async function cargarDatos() {
       <div class="alumno-fila">
         <div>
           <div class="alumno-nombre">${r.alumno}</div>
-          <div class="alumno-ppm">${r.ppm} PPM · ${r.precision}% precisión</div>
+          <div class="alumno-meta">${r.ppm} PPM · ${r.precision}% precisión</div>
         </div>
         <div class="alumno-derecha">
           <span class="badge ${badge}">${texto}</span>
@@ -239,14 +240,24 @@ async function cargarDatos() {
       </div>`;
   }).join("");
 
-  const totalOmisiones = data.reduce((s, r) => s + r.omisiones, 0);
-  const totalSustituciones = data.reduce((s, r) => s + r.sustituciones, 0);
-  const totalRepeticiones = data.reduce((s, r) => s + r.repeticiones, 0);
-  const totalErrores = totalOmisiones + totalSustituciones + totalRepeticiones || 1;
-  document.getElementById("lista-errores").innerHTML = `
-    <div class="error-fila"><span>Omisiones</span><div style="display:flex;align-items:center;gap:8px;"><div class="barra-wrap"><div class="barra-fill" style="width:${(totalOmisiones/totalErrores)*100}%;background:#fca5a5"></div></div><span style="font-size:12px;color:#6b7280">${totalOmisiones}</span></div></div>
-    <div class="error-fila"><span>Sustituciones</span><div style="display:flex;align-items:center;gap:8px;"><div class="barra-wrap"><div class="barra-fill" style="width:${(totalSustituciones/totalErrores)*100}%;background:#fde68a"></div></div><span style="font-size:12px;color:#6b7280">${totalSustituciones}</span></div></div>
-    <div class="error-fila"><span>Repeticiones</span><div style="display:flex;align-items:center;gap:8px;"><div class="barra-wrap"><div class="barra-fill" style="width:${(totalRepeticiones/totalErrores)*100}%;background:#ddd6fe"></div></div><span style="font-size:12px;color:#6b7280">${totalRepeticiones}</span></div></div>`;
+  const tO = data.reduce((s, r) => s + r.omisiones, 0);
+  const tS = data.reduce((s, r) => s + r.sustituciones, 0);
+  const tR = data.reduce((s, r) => s + r.repeticiones, 0);
+  const tV = data.reduce((s, r) => s + (r.vacilaciones || 0), 0);
+  const tTotal = tO + tS + tR + tV || 1;
+  document.getElementById("lista-errores").innerHTML = [
+    { label: "Omisiones", val: tO, color: "#F09595" },
+    { label: "Sustituciones", val: tS, color: "#EF9F27" },
+    { label: "Repeticiones", val: tR, color: "#AFA9EC" },
+    { label: "Vacilaciones", val: tV, color: "#5DCAA5" }
+  ].map(e => `
+    <div class="error-fila">
+      <span>${e.label}</span>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div class="barra-wrap"><div class="barra-fill" style="width:${Math.round((e.val/tTotal)*100)}%;background:${e.color}"></div></div>
+        <span style="font-size:12px;color:#9ca3af;min-width:20px;text-align:right">${e.val}</span>
+      </div>
+    </div>`).join("");
 }
 
 function generarPDF(nombreAlumno) {
@@ -258,18 +269,18 @@ function generarPDF(nombreAlumno) {
   const objetivo = 90;
   const estado = ultima.ppm >= objetivo ? "En nivel" : ultima.ppm >= 70 ? "Cerca del nivel" : "Necesita apoyo";
   const recomendacion = ultima.ppm >= objetivo
-    ? "El alumno ha alcanzado el nivel esperado para su curso. Se recomienda mantener la práctica diaria y avanzar a textos de mayor complejidad."
+    ? "El alumno ha alcanzado el nivel esperado. Se recomienda mantener la práctica diaria y avanzar a textos de mayor complejidad."
     : ultima.ppm >= 70
     ? "El alumno está cerca del objetivo. Se recomienda práctica diaria de 10 minutos con lecturas de su nivel actual."
     : "El alumno necesita apoyo adicional. Se recomienda sesiones de lectura guiada y revisión con el orientador educativo.";
 
-  doc.setFillColor(16, 185, 129);
+  doc.setFillColor(29, 158, 117);
   doc.rect(0, 0, 210, 28, "F");
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(18); doc.setFont("helvetica", "bold");
   doc.text("LectorIA", 14, 12);
   doc.setFontSize(11); doc.setFont("helvetica", "normal");
-  doc.text("Informe de Velocidad Lectora", 14, 21);
+  doc.text("Informe de velocidad lectora", 14, 21);
   doc.text(fecha, 196, 21, { align: "right" });
   doc.setTextColor(17, 17, 17);
   doc.setFontSize(16); doc.setFont("helvetica", "bold");
@@ -278,8 +289,8 @@ function generarPDF(nombreAlumno) {
   doc.setTextColor(107, 114, 128);
   doc.text(`${sesiones.length} sesión(es) completada(s)`, 14, 50);
   doc.setFillColor(249, 250, 251);
-  doc.roundedRect(14, 58, 85, 30, 4, 4, "F");
-  doc.roundedRect(111, 58, 85, 30, 4, 4, "F");
+  doc.roundedRect(14, 58, 85, 30, 3, 3, "F");
+  doc.roundedRect(111, 58, 85, 30, 3, 3, "F");
   doc.setTextColor(107, 114, 128); doc.setFontSize(9);
   doc.text("PPM ACTUAL", 20, 66);
   doc.text("OBJETIVO CURSO", 117, 66);
@@ -287,27 +298,31 @@ function generarPDF(nombreAlumno) {
   doc.text(String(ultima.ppm), 20, 82);
   doc.text(String(objetivo), 117, 82);
   doc.setFontSize(10); doc.setFont("helvetica", "normal");
-  const estadoColor = ultima.ppm >= objetivo ? [6, 95, 70] : ultima.ppm >= 70 ? [133, 77, 14] : [153, 27, 27];
+  const estadoColor = ultima.ppm >= objetivo ? [15, 110, 86] : ultima.ppm >= 70 ? [133, 77, 14] : [121, 31, 31];
   doc.setTextColor(...estadoColor);
   doc.text(`Estado: ${estado}`, 14, 100);
   doc.setDrawColor(229, 231, 235); doc.line(14, 106, 196, 106);
   doc.setTextColor(17, 17, 17); doc.setFontSize(12); doc.setFont("helvetica", "bold");
   doc.text("Detalle de errores", 14, 116);
-  [{ label: "Omisiones", valor: ultima.omisiones, color: [252, 165, 165] }, { label: "Sustituciones", valor: ultima.sustituciones, color: [253, 230, 138] }, { label: "Repeticiones", valor: ultima.repeticiones, color: [221, 214, 254] }].forEach((e, i) => {
-    const y = 126 + i * 14;
+  [
+    { label: "Omisiones", valor: ultima.omisiones },
+    { label: "Sustituciones", valor: ultima.sustituciones },
+    { label: "Repeticiones", valor: ultima.repeticiones },
+    { label: "Vacilaciones", valor: ultima.vacilaciones || 0 }
+  ].forEach((e, i) => {
+    const y = 126 + i * 12;
     doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(55, 65, 81);
     doc.text(e.label, 14, y);
-    doc.setFillColor(...e.color);
-    doc.roundedRect(80, y - 6, 60, 8, 2, 2, "F");
-    doc.setTextColor(17, 17, 17);
-    doc.text(String(e.valor), 112, y, { align: "center" });
+    doc.setTextColor(17, 17, 17); doc.setFont("helvetica", "bold");
+    doc.text(String(e.valor), 80, y);
   });
+  doc.setFont("helvetica", "normal");
   doc.setFillColor(240, 253, 244);
-  doc.roundedRect(14, 172, 182, 30, 4, 4, "F");
-  doc.setTextColor(22, 101, 52); doc.setFontSize(10); doc.setFont("helvetica", "bold");
-  doc.text("Recomendación", 20, 182);
+  doc.roundedRect(14, 178, 182, 28, 3, 3, "F");
+  doc.setTextColor(15, 110, 86); doc.setFontSize(10); doc.setFont("helvetica", "bold");
+  doc.text("Recomendación", 20, 188);
   doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-  doc.text(doc.splitTextToSize(recomendacion, 170), 20, 190);
+  doc.text(doc.splitTextToSize(recomendacion, 170), 20, 196);
   doc.setTextColor(156, 163, 175); doc.setFontSize(8);
   doc.text("Generado por LectorIA · Plataforma de estimulación lectora", 105, 285, { align: "center" });
   doc.save(`informe_${nombreAlumno.replace(/ /g,"_")}_${fecha.replace(/\//g,"-")}.pdf`);

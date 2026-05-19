@@ -8,102 +8,111 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: system-ui, sans-serif; background: #f5f5f0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1rem; }
-    .screen { background: white; border-radius: 20px; padding: 1.5rem; max-width: 480px; width: 100%; }
-    .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; }
-    .avatar { width: 40px; height: 40px; border-radius: 50%; background: #dbeafe; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14px; color: #1e40af; }
-    .level { font-size: 12px; background: #d1fae5; color: #065f46; padding: 4px 12px; border-radius: 20px; font-weight: 500; }
-    .mascot { text-align: center; font-size: 40px; margin-bottom: 0.25rem; }
-    .mascot-msg { text-align: center; font-size: 13px; color: #6b7280; margin-bottom: 1rem; }
-    .text-card { background: #fafafa; border: 1px solid #e5e7eb; border-radius: 14px; padding: 1.25rem; margin-bottom: 1rem; }
-    .text-meta { font-size: 12px; color: #9ca3af; margin-bottom: 0.75rem; }
-    .reading { font-size: 20px; line-height: 2; color: #111; }
-    .word { display: inline; border-radius: 4px; padding: 1px 2px; transition: all 0.15s; }
+    .screen { background: #fff; border-radius: 20px; padding: 1.5rem; max-width: 440px; width: 100%; border: 0.5px solid #e5e7eb; }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+    .brand { font-size: 15px; font-weight: 500; color: #111; display: flex; align-items: center; gap: 8px; }
+    .brand-dot { width: 8px; height: 8px; border-radius: 50%; background: #1D9E75; }
+    .back-btn { font-size: 12px; color: #6b7280; border: 0.5px solid #d1d5db; border-radius: 8px; padding: 5px 12px; background: transparent; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+    .api-box { background: #fefce8; border: 0.5px solid #fde047; border-radius: 12px; padding: 0.875rem 1rem; margin-bottom: 1rem; }
+    .api-box label { font-size: 11px; color: #854d0e; font-weight: 500; display: block; margin-bottom: 4px; }
+    .api-box input { width: 100%; padding: 7px 10px; border-radius: 8px; border: 0.5px solid #e5e7eb; font-size: 13px; background: #fff; color: #111; outline: none; }
+    .alumno-card { display: flex; align-items: center; gap: 12px; background: #f5f5f0; border-radius: 12px; padding: 0.875rem 1rem; margin-bottom: 1.25rem; }
+    .avatar { width: 40px; height: 40px; border-radius: 50%; background: #E1F5EE; display: flex; align-items: center; justify-content: center; font-weight: 500; font-size: 13px; color: #0F6E56; flex-shrink: 0; }
+    .alumno-info { flex: 1; }
+    .alumno-nombre { font-size: 14px; font-weight: 500; color: #111; }
+    .alumno-sub { font-size: 11px; color: #6b7280; margin-top: 1px; }
+    .nivel-badge { font-size: 11px; background: #E1F5EE; color: #0F6E56; padding: 3px 10px; border-radius: 20px; font-weight: 500; white-space: nowrap; }
+    .alumno-input { width: 100%; padding: 0; border: none; background: transparent; font-size: 14px; font-weight: 500; color: #111; outline: none; }
+    .alumno-input::placeholder { color: #9ca3af; font-weight: 400; }
+    .mascot { text-align: center; font-size: 36px; margin-bottom: 0.25rem; }
+    .mascot-msg { text-align: center; font-size: 13px; color: #6b7280; margin-bottom: 1.25rem; }
+    .texto-card { border: 0.5px solid #e5e7eb; border-radius: 14px; padding: 1.25rem; margin-bottom: 1rem; background: #fff; }
+    .texto-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 0.875rem; flex-wrap: wrap; }
+    .materia-badge { font-size: 10px; padding: 2px 8px; border-radius: 6px; background: #E6F1FB; color: #0C447C; font-weight: 500; }
+    .palabras-count { font-size: 11px; color: #9ca3af; }
+    .leyenda { display: flex; gap: 12px; margin-bottom: 0.75rem; flex-wrap: wrap; }
+    .ley-item { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #6b7280; }
+    .ley-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+    .reading { font-size: 19px; line-height: 2; color: #111; }
+    .word { display: inline; border-radius: 3px; padding: 1px 2px; }
     .word.done { color: #9ca3af; }
-    .word.omision { background: #fee2e2; color: #991b1b; padding: 1px 4px; }
-    .word.sustitucion { background: #fef9c3; color: #854d0e; padding: 1px 4px; }
-    .word.repeticion { background: #ede9fe; color: #5b21b6; padding: 1px 4px; }
-    .prog-wrap { background: #f3f4f6; border-radius: 8px; height: 8px; margin-bottom: 4px; overflow: hidden; }
-    .prog-fill { height: 100%; border-radius: 8px; background: #10b981; transition: width 0.3s; }
+    .word.omision { background: #FCEBEB; color: #791F1F; padding: 1px 4px; }
+    .word.sustitucion { background: #FAEEDA; color: #633806; padding: 1px 4px; }
+    .word.repeticion { background: #EEEDFE; color: #3C3489; padding: 1px 4px; }
+    .prog-wrap { background: #f3f4f6; border-radius: 6px; height: 6px; margin-bottom: 4px; overflow: hidden; }
+    .prog-fill { height: 100%; border-radius: 6px; background: #1D9E75; transition: width 0.3s; }
     .prog-label { font-size: 11px; color: #9ca3af; text-align: right; margin-bottom: 1rem; }
-    .stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 1rem; }
-    .stat { background: #f9fafb; border-radius: 10px; padding: 10px; text-align: center; }
-    .stat-n { font-size: 22px; font-weight: 600; color: #111; }
+    .stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 1.25rem; }
+    .stat { background: #f9fafb; border-radius: 10px; padding: 10px 8px; text-align: center; }
+    .stat-n { font-size: 20px; font-weight: 500; color: #111; }
     .stat-l { font-size: 10px; color: #9ca3af; margin-top: 2px; }
-    .btn { width: 100%; padding: 16px; border-radius: 14px; border: none; font-size: 17px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; transition: transform 0.1s; }
-    .btn:active { transform: scale(0.98); }
-    .btn.idle { background: #10b981; color: white; }
-    .btn.recording { background: #ef4444; color: white; animation: pulse 1.2s infinite; }
-    .btn.finished { background: #3b82f6; color: white; }
+    .btn { width: 100%; padding: 14px; border-radius: 12px; border: none; font-size: 15px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: opacity 0.15s; }
+    .btn.idle { background: #1D9E75; color: #fff; }
+    .btn.recording { background: #E24B4A; color: #fff; animation: pulse 1.2s infinite; }
+    .btn.finished { background: #378ADD; color: #fff; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.7} }
-    .result { background: #f0fdf4; border: 1px solid #86efac; border-radius: 14px; padding: 1.25rem; margin-top: 1rem; display: none; }
+    .result { background: #f9fafb; border: 0.5px solid #e5e7eb; border-radius: 14px; padding: 1.25rem; margin-top: 1rem; display: none; }
     .result.show { display: block; }
-    .result-title { font-size: 15px; font-weight: 600; color: #166534; margin-bottom: 0.75rem; }
+    .result-header { display: flex; align-items: center; gap: 8px; margin-bottom: 1rem; }
+    .result-title { font-size: 14px; font-weight: 500; color: #111; }
     .result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 1rem; }
-    .result-item { background: white; border-radius: 8px; padding: 10px; text-align: center; }
-    .result-n { font-size: 22px; font-weight: 600; color: #166534; }
-    .result-l { font-size: 10px; color: #4ade80; }
-    .errores-detalle { background: white; border-radius: 10px; padding: 1rem; margin-top: 0.5rem; }
-    .errores-titulo { font-size: 13px; font-weight: 600; color: #166534; margin-bottom: 0.5rem; }
-    .error-fila { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 1px solid #f0fdf4; font-size: 12px; }
-    .error-fila:last-child { border-bottom: none; }
-    .tag { font-size: 10px; padding: 2px 8px; border-radius: 20px; font-weight: 500; }
-    .tag-omision { background: #fee2e2; color: #991b1b; }
-    .tag-sustitucion { background: #fef9c3; color: #854d0e; }
-    .tag-repeticion { background: #ede9fe; color: #5b21b6; }
-    .leyenda { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 0.75rem; font-size: 11px; }
-    .leyenda-item { display: flex; align-items: center; gap: 4px; }
-    .leyenda-dot { width: 10px; height: 10px; border-radius: 2px; }
-    .api-box { background: #fefce8; border: 1px solid #fde047; border-radius: 12px; padding: 1rem; margin-bottom: 1rem; }
-    .api-box input { width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid #e5e7eb; font-size: 13px; margin-top: 6px; }
-    .api-box label { font-size: 12px; color: #854d0e; font-weight: 500; }
-    .alumno-box { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 12px; padding: 1rem; margin-bottom: 1rem; }
-    .alumno-box input { width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid #e5e7eb; font-size: 13px; margin-top: 6px; }
-    .alumno-box label { font-size: 12px; color: #0369a1; font-weight: 500; }
-    .guardado { font-size: 12px; color: #10b981; text-align: center; margin-top: 8px; display: none; }
+    .result-item { background: #fff; border: 0.5px solid #e5e7eb; border-radius: 10px; padding: 10px; text-align: center; }
+    .result-n { font-size: 22px; font-weight: 500; color: #111; }
+    .result-n.ok { color: #1D9E75; }
+    .result-n.warn { color: #BA7517; }
+    .result-l { font-size: 10px; color: #9ca3af; margin-top: 2px; }
+    .error-list { background: #fff; border: 0.5px solid #e5e7eb; border-radius: 10px; padding: 0.75rem; }
+    .error-titulo { font-size: 12px; font-weight: 500; color: #374151; margin-bottom: 0.5rem; }
+    .error-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 0.5px solid #f3f4f6; font-size: 12px; color: #6b7280; }
+    .error-row:last-child { border-bottom: none; }
+    .tag { font-size: 10px; padding: 2px 8px; border-radius: 6px; font-weight: 500; }
+    .tag-omision { background: #FCEBEB; color: #791F1F; }
+    .tag-sustitucion { background: #FAEEDA; color: #633806; }
+    .tag-repeticion { background: #EEEDFE; color: #3C3489; }
+    .guardado { font-size: 12px; color: #1D9E75; text-align: center; margin-top: 10px; display: none; align-items: center; justify-content: center; gap: 5px; }
+    .guardado.show { display: flex; }
   </style>
 </head>
 <body>
 <div class="screen">
 
+  <div class="header">
+    <div class="brand"><div class="brand-dot"></div>LectorIA</div>
+    <button class="back-btn" onclick="window.location.href='panel.html'">← Panel</button>
+  </div>
+
   <div class="api-box">
-    <label>🔑 API key de OpenAI</label>
+    <label>API key de OpenAI</label>
     <input type="password" id="apikey" placeholder="sk-..." />
   </div>
 
-  <div class="alumno-box">
-    <label>👤 Nombre del alumno</label>
-    <input type="text" id="alumno" placeholder="Ej: Alejandro López" />
-  </div>
-  <div style="margin-bottom:1rem;">
-    <button onclick="window.location.href='panel.html'" style="font-size:12px;padding:6px 14px;border-radius:8px;border:1px solid #e5e7eb;background:white;color:#374151;cursor:pointer;">← Volver al panel</button>
-  </div>
-  <div class="top">
-    <div style="display:flex;align-items:center;gap:10px;">
-      <div class="avatar">AL</div>
-      <div>
-        <div style="font-size:13px;font-weight:600;">¡Hola!</div>
-        <div style="font-size:11px;color:#9ca3af;">Sesión de lectura</div>
-      </div>
+  <div class="alumno-card">
+    <div class="avatar" id="avatar">?</div>
+    <div class="alumno-info">
+      <input class="alumno-input" type="text" id="alumno" placeholder="Nombre del alumno" />
+      <div class="alumno-sub">Sesión de lectura</div>
     </div>
-    <span class="level">Nivel 2B</span>
+    <span class="nivel-badge" id="nivel-badge">—</span>
   </div>
 
   <div class="mascot" id="mascot">📖</div>
   <div class="mascot-msg" id="msg">Lee el texto en voz alta cuando estés listo</div>
 
-  <div class="text-card">
-    <div class="text-meta" id="text-meta">Cargando lectura...</div>
-    
+  <div class="texto-card">
+    <div class="texto-meta">
+      <span class="materia-badge" id="materia-badge">—</span>
+      <span class="palabras-count" id="palabras-count">— palabras</span>
+    </div>
     <div class="leyenda">
-      <div class="leyenda-item"><div class="leyenda-dot" style="background:#fca5a5"></div><span>Omisión</span></div>
-      <div class="leyenda-item"><div class="leyenda-dot" style="background:#fde68a"></div><span>Sustitución</span></div>
-      <div class="leyenda-item"><div class="leyenda-dot" style="background:#ddd6fe"></div><span>Repetición</span></div>
+      <div class="ley-item"><div class="ley-dot" style="background:#F09595"></div>Omisión</div>
+      <div class="ley-item"><div class="ley-dot" style="background:#EF9F27"></div>Sustitución</div>
+      <div class="ley-item"><div class="ley-dot" style="background:#AFA9EC"></div>Repetición</div>
     </div>
     <div class="reading" id="texto"></div>
   </div>
 
   <div class="prog-wrap"><div class="prog-fill" id="prog" style="width:0%"></div></div>
-  <div class="prog-label" id="prog-label">0 de 40 palabras</div>
+  <div class="prog-label" id="prog-label">0 palabras</div>
 
   <div class="stats">
     <div class="stat"><div class="stat-n" id="ppm">—</div><div class="stat-l">palabras/min</div></div>
@@ -114,34 +123,47 @@
   <button class="btn idle" id="btn" onclick="toggleLectura()">🎤 Pulsa para leer</button>
 
   <div class="result" id="result">
-    <div class="result-title">🌟 ¡Muy bien!</div>
+    <div class="result-header">
+      <span style="font-size:18px">⭐</span>
+      <span class="result-title" id="result-title">¡Muy bien!</span>
+    </div>
     <div class="result-grid">
-        <div class="result-item"><div class="result-n" id="r-ppm">—</div><div class="result-l">palabras/min</div></div>
-        <div class="result-item"><div class="result-n" id="r-prec">—</div><div class="result-l">precisión</div></div>
-        <div class="result-item"><div class="result-n" id="r-omisiones">0</div><div class="result-l">omisiones</div></div>
-        <div class="result-item"><div class="result-n" id="r-sustituciones">0</div><div class="result-l">sustituciones</div></div>
-        <div class="result-item"><div class="result-n" id="r-repeticiones">0</div><div class="result-l">repeticiones</div></div>
-        <div class="result-item"><div class="result-n" id="r-vacilaciones">0</div><div class="result-l">vacilaciones/silabeo</div></div>
-      </div>
-    <div class="errores-detalle" id="detalle-errores" style="display:none">
-      <div class="errores-titulo">Detalle de errores</div>
+      <div class="result-item"><div class="result-n ok" id="r-ppm">—</div><div class="result-l">palabras/min</div></div>
+      <div class="result-item"><div class="result-n ok" id="r-prec">—</div><div class="result-l">precisión</div></div>
+      <div class="result-item"><div class="result-n warn" id="r-omisiones">0</div><div class="result-l">omisiones</div></div>
+      <div class="result-item"><div class="result-n warn" id="r-sustituciones">0</div><div class="result-l">sustituciones</div></div>
+      <div class="result-item"><div class="result-n warn" id="r-repeticiones">0</div><div class="result-l">repeticiones</div></div>
+      <div class="result-item"><div class="result-n warn" id="r-vacilaciones">0</div><div class="result-l">vacilaciones</div></div>
+    </div>
+    <div class="error-list" id="detalle-errores" style="display:none">
+      <div class="error-titulo">Detalle de errores</div>
       <div id="lista-errores"></div>
     </div>
-    <div class="guardado" id="guardado">✓ Sesión guardada correctamente</div>
+    <div class="guardado" id="guardado">✓ Sesión guardada</div>
   </div>
 </div>
 
 <script>
-// Recoger alumno desde el panel
 const alumnoGuardado = localStorage.getItem("alumno_nombre");
 const cursoGuardado = localStorage.getItem("alumno_curso");
 if (alumnoGuardado) {
   document.getElementById("alumno").value = alumnoGuardado;
   document.getElementById("alumno").readOnly = true;
+  const iniciales = alumnoGuardado.split(" ").map(n => n[0]).join("").substring(0,2).toUpperCase();
+  document.getElementById("avatar").textContent = iniciales;
+}
+if (cursoGuardado) {
+  document.getElementById("nivel-badge").textContent = cursoGuardado;
 }
 
 const keyGuardada = localStorage.getItem("openai_key");
 if (keyGuardada) document.getElementById("apikey").value = keyGuardada;
+
+document.getElementById("alumno").addEventListener("input", function() {
+  const val = this.value.trim();
+  const iniciales = val.split(" ").map(n => n[0]).filter(Boolean).join("").substring(0,2).toUpperCase();
+  document.getElementById("avatar").textContent = iniciales || "?";
+});
 
 const SUPABASE_URL = "https://mvwuyxrlkyikfgxzokxv.supabase.co";
 const SUPABASE_KEY = "sb_publishable_SNSZe5l2R3jcxiHxcxEqgg_XBrW-Xvi";
@@ -161,7 +183,8 @@ const lecturasDelCurso = lecturas.filter(l => l.curso === cursoAlumno);
 const lecturaActual = lecturasDelCurso[Math.floor(Math.random() * lecturasDelCurso.length)];
 const textOriginal = lecturaActual.texto;
 const palabras = textOriginal.split(" ");
-document.getElementById("text-meta").textContent = lecturaActual.titulo + " — " + lecturaActual.materia + " · " + palabras.length + " palabras";
+document.getElementById("materia-badge").textContent = lecturaActual.materia;
+document.getElementById("palabras-count").textContent = palabras.length + " palabras";
 
 const texto = document.getElementById("texto");
 palabras.forEach((p, i) => {
@@ -236,7 +259,6 @@ async function parar() {
   };
 }
 
-// Levenshtein real para comparar caracteres
 function levenshtein(a, b) {
   const m = a.length, n = b.length;
   const dp = Array.from({length: m+1}, (_, i) => Array.from({length: n+1}, (_, j) => i === 0 ? j : j === 0 ? i : 0));
@@ -249,32 +271,19 @@ function levenshtein(a, b) {
 }
 
 function normalizar(str) {
-  return str.toLowerCase()
-    .replace(/[.,;:!?¡¿\-]/g, "")
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-    .trim();
+  return str.toLowerCase().replace(/[.,;:!?¡¿\-]/g, "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 }
 
-// Palabras funcionales que se tratan con más tolerancia
 const PALABRAS_FUNCIONALES = new Set(["el","la","los","las","un","una","unos","unas","de","del","al","en","y","a","que","se","su","con","por","para","es","son","lo","le","me","te","nos"]);
 
 function similitud(orig, leida) {
-  const a = normalizar(orig);
-  const b = normalizar(leida);
+  const a = normalizar(orig), b = normalizar(leida);
   if (a === b) return 1;
-
-  // Palabras funcionales — más tolerancia
   if (PALABRAS_FUNCIONALES.has(a) && PALABRAS_FUNCIONALES.has(b)) return 0.9;
-
-  // Contiene la otra (silabeo parcial)
   if (a.includes(b) || b.includes(a)) return 0.82;
-
   const maxLen = Math.max(a.length, b.length);
   if (maxLen === 0) return 1;
-
   const dist = levenshtein(a, b);
-
-  // Umbral adaptativo según longitud — palabras cortas son más estrictas
   if (maxLen <= 3) return dist === 0 ? 1 : dist === 1 ? 0.6 : 0;
   if (maxLen <= 6) return 1 - (dist / maxLen) > 0.6 ? 1 - (dist / maxLen) : 0;
   return 1 - (dist / maxLen);
@@ -283,37 +292,16 @@ function similitud(orig, leida) {
 function detectarRepeticiones(leidas) {
   const repetidas = new Set();
   for (let i = 1; i < leidas.length; i++) {
-    if (normalizar(leidas[i]) === normalizar(leidas[i-1])) {
-      repetidas.add(normalizar(leidas[i]));
-    }
+    if (normalizar(leidas[i]) === normalizar(leidas[i-1])) repetidas.add(normalizar(leidas[i]));
   }
   return repetidas;
-}
-
-function detectarSilabeo(words, palabraOrig) {
-  // Si una palabra del texto aparece como múltiples words cortas consecutivas en Whisper
-  // con poca duración cada una, es probable silabeo
-  if (!words || words.length === 0) return false;
-  const orig = normalizar(palabraOrig);
-  for (let i = 0; i < words.length - 1; i++) {
-    const w1 = normalizar(words[i].word);
-    const w2 = normalizar(words[i+1].word);
-    const combinada = w1 + w2;
-    const duracion1 = (words[i].end - words[i].start);
-    if (combinada === orig && duracion1 < 0.4) return true;
-    if (orig.startsWith(w1) && orig.endsWith(w2) && duracion1 < 0.4) return true;
-  }
-  return false;
 }
 
 function detectarVacilaciones(words) {
   const vacilaciones = new Set();
   if (!words || words.length === 0) return vacilaciones;
   for (let i = 1; i < words.length; i++) {
-    const pausa = words[i].start - words[i-1].end;
-    if (pausa > 1.2) {
-      vacilaciones.add(normalizar(words[i].word));
-    }
+    if (words[i].start - words[i-1].end > 1.2) vacilaciones.add(normalizar(words[i].word));
   }
   return vacilaciones;
 }
@@ -323,7 +311,7 @@ async function procesarResultado(transcripcion, words = [], segmentos = []) {
   const repetidas = detectarRepeticiones(leidas);
   const vacilaciones = detectarVacilaciones(words);
   const erroresDetalle = [];
-  let omisiones = 0, sustituciones = 0, reps = 0, vacs = 0, posibleSilabeo = 0;
+  let omisiones = 0, sustituciones = 0, reps = 0, vacs = 0;
   let totalErrores = 0, coincidencias = 0;
   let idxLeida = 0;
 
@@ -331,30 +319,20 @@ async function procesarResultado(transcripcion, words = [], segmentos = []) {
     const orig = normalizar(p);
     const span = document.getElementById("w" + i);
     let mejorScore = 0, mejorIdx = idxLeida, mejorPalabra = "";
-
-    // Ventana de búsqueda ampliada a 8 palabras
     for (let j = idxLeida; j < Math.min(idxLeida + 8, leidas.length); j++) {
       const score = similitud(p, leidas[j]);
       if (score > mejorScore) { mejorScore = score; mejorIdx = j; mejorPalabra = leidas[j]; }
     }
-
-    const esSilabeo = detectarSilabeo(words.slice(idxLeida, idxLeida + 6), p);
-    const esVacilacion = vacilaciones.has(orig);
     const esRepeticion = repetidas.has(normalizar(mejorPalabra));
+    const esVacilacion = vacilaciones.has(orig);
 
     if (mejorScore >= 0.75) {
-      if (esSilabeo) {
-        span.className = "word sustitucion";
-        span.title = "Posible silabeo";
-        erroresDetalle.push({ tipo: "silabeo", original: p, leida: mejorPalabra });
-        posibleSilabeo++; totalErrores++;
-      } else if (esRepeticion) {
+      if (esRepeticion) {
         span.className = "word repeticion";
         erroresDetalle.push({ tipo: "repeticion", original: p, leida: mejorPalabra });
         reps++; totalErrores++;
       } else if (esVacilacion) {
         span.className = "word sustitucion";
-        span.title = "Vacilación detectada";
         erroresDetalle.push({ tipo: "vacilacion", original: p, leida: mejorPalabra });
         vacs++; totalErrores++;
       } else {
@@ -386,41 +364,32 @@ async function procesarResultado(transcripcion, words = [], segmentos = []) {
   document.getElementById("r-omisiones").textContent = omisiones;
   document.getElementById("r-sustituciones").textContent = sustituciones;
   document.getElementById("r-repeticiones").textContent = reps;
-document.getElementById("r-vacilaciones").textContent = vacs + posibleSilabeo;
+  document.getElementById("r-vacilaciones").textContent = vacs;
+
+  const alumno = document.getElementById("alumno").value.trim();
+  document.getElementById("result-title").textContent = "¡Muy bien, " + alumno.split(" ")[0] + "!";
 
   if (erroresDetalle.length > 0) {
     const lista = document.getElementById("lista-errores");
     lista.innerHTML = erroresDetalle.map(e => `
-      <div class="error-fila">
-        <span style="color:#374151">"${e.original}"</span>
+      <div class="error-row">
+        <span>"${e.original}"</span>
         <span style="color:#9ca3af">→ "${e.leida}"</span>
-        <span class="tag tag-${e.tipo === 'silabeo' || e.tipo === 'vacilacion' ? 'sustitucion' : e.tipo}">${e.tipo}</span>
-      </div>
-    `).join("");
+        <span class="tag tag-${e.tipo === 'vacilacion' ? 'sustitucion' : e.tipo}">${e.tipo}</span>
+      </div>`).join("");
     document.getElementById("detalle-errores").style.display = "block";
   }
 
   document.getElementById("btn").textContent = "✓ Lectura completada";
-  document.getElementById("mascot").textContent = "🌟";
+  document.getElementById("mascot").textContent = "⭐";
   document.getElementById("msg").textContent = "¡Genial! Mira tus resultados";
   document.getElementById("result").classList.add("show");
 
-  const alumno = document.getElementById("alumno").value.trim();
   const { error } = await sb.from("sesiones").insert({
-    alumno: alumno,
-    fecha: new Date().toISOString(),
-    ppm: ppmFinal,
-    precision: precFinal,
-    omisiones: omisiones,
-    sustituciones: sustituciones,
-    repeticiones: reps,
-    vacilaciones: vacs + posibleSilabeo,
-    texto_id: lecturaActual.id
+    alumno, fecha: new Date().toISOString(), ppm: ppmFinal, precision: precFinal,
+    omisiones, sustituciones, repeticiones: reps, vacilaciones: vacs, texto_id: lecturaActual.id
   });
-
-  if (!error) {
-    document.getElementById("guardado").style.display = "block";
-  }
+  if (!error) document.getElementById("guardado").classList.add("show");
 }
 </script>
 </body>
