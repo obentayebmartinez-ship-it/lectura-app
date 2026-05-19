@@ -93,7 +93,7 @@
 
   <div class="text-card">
     <div class="text-meta" id="text-meta">Cargando lectura...</div>
-    const palabras = textOriginal.split(" ");
+    
     <div class="leyenda">
       <div class="leyenda-item"><div class="leyenda-dot" style="background:#fca5a5"></div><span>Omisión</span></div>
       <div class="leyenda-item"><div class="leyenda-dot" style="background:#fde68a"></div><span>Sustitución</span></div>
@@ -191,7 +191,7 @@ const cursoAlumno = localStorage.getItem("alumno_curso") || "2P";
 const lecturasDelCurso = lecturas.filter(l => l.curso === cursoAlumno);
 const lecturaActual = lecturasDelCurso[Math.floor(Math.random() * lecturasDelCurso.length)];
 const textOriginal = lecturaActual.texto;
-const palabras = textOriginal.split(" ");
+const palabras = textOriginal.split("document.getElementById("text-meta").textContent = lecturaActual.titulo + " — " + lecturaActual.materia + " · " + palabras.length + " palabras"; ");
 
 const texto = document.getElementById("texto");
 palabras.forEach((p, i) => {
