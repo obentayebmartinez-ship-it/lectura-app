@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LectorIA</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #f5f5f0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+    .screen { background: white; border-radius: 20px; padding: 1.5rem; max-width: 480px; width: 100%; }
+    .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; }
+    .avatar { width: 40px; height: 40px; border-radius: 50%; background: #dbeafe; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14px; color: #1e40af; }
+    .level { font-size: 12px; background: #d1fae5; color: #065f46; padding: 4px 12px; border-radius: 20px; font-weight: 500; }
+    .mascot { text-align: center; font-size: 40px; margin-bottom: 0.25rem; }
+    .mascot-msg { text-align: center; font-size: 13px; color: #6b7280; margin-bottom: 1rem; }
+    .text-card { background: #fafafa; border: 1px solid #e5e7eb; border-radius: 14px; padding: 1.25rem; margin-bottom: 1rem; }
+    .text-meta { font-size: 12px; color: #9ca3af; margin-bottom: 0.75rem; }
+    .reading { font-size: 20px; line-height: 2; color: #111; }
+    .word { display: inline; border-radius: 4px; padding: 1px 2px; transition: all 0.15s; }
+    .word.done { color: #9ca3af; }
+    .word.current { background: #fde68a; color: #78350f; padding: 1px 4px; }
+    .word.error { background: #fee2e2; color: #991b1b; padding: 1px 4px; }
+    .prog-wrap { background: #f3f4f6; border-radius: 8px; height: 8px; margin-bottom: 4px; overflow: hidden; }
+    .prog-fill { height: 100%; border-radius: 8px; background: #10b981; transition: width 0.3s; }
+    .prog-label { font-size: 11px; color: #9ca3af; text-align: right; margin-bottom: 1rem; }
+    .stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 1rem; }
+    .stat { background: #f9fafb; border-radius: 10px; padding: 10px; text-align: center; }
+    .stat-n { font-size: 22px; font-weight: 600; color: #111; }
+    .stat-l { font-size: 10px; color: #9ca3af; margin-top: 2px; }
+    .btn { width: 100%; padding: 16px; border-radius: 14px; border: none; font-size: 17px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; transition: transform 0.1s; }
+    .btn:active { transform: scale(0.98); }
+    .btn.idle { background: #10b981; color: white; }
+    .btn.recording { background: #ef4444; color: white; animation: pulse 1.2s infinite; }
+    .btn.finished { background: #3b82f6; color: white; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.7} }
+    .result { background: #f0fdf4; border: 1px solid #86efac; border-radius: 14px; padding: 1.25rem; margin-top: 1rem; display: none; }
+    .result.show { display: block; }
+    .result-title { font-size: 15px; font-weight: 600; color: #166534; margin-bottom: 0.75rem; }
+    .result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .result-item { background: white; border-radius: 8px; padding: 10px; text-align: center; }
+    .result-n { font-size: 22px; font-weight: 600; color: #166534; }
+    .result-l { font-size: 10px; color: #4ade80; }
+  </style>
+</head>
+<body>
+<div class="screen">
+  <div class="top">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div class="avatar">AL</div>
+      <div>
+        <div style="font-size:13px;font-weight:600;">¡Hola, Alejandro!</div>
+        <div style="font-size:11px;color:#9ca3af;">Sesión 25</div>
+      </div>
+    </div>
+    <span class="level">Nivel 2B</span>
+  </div>
+
+  <div class="mascot" id="mascot">📖</div>
+  <div class="mascot-msg" id="msg">Lee el texto en voz alta cuando estés listo</div>
+
+  <div class="text-card">
+    <div class="text-meta">Las abejas — Ciencias Naturales · 40 palabras</div>
+    <div class="reading" id="texto"></div>
+  </div>
+
+  <div class="prog-wrap"><div class="prog-fill" id="prog" style="width:0%"></div></div>
+  <div class="prog-label" id="prog-label">0 de 40 palabras</div>
+
+  <div class="stats">
+    <div class="stat"><div class="stat-n" id="ppm">—</div><div class="stat-l">palabras/min</div></div>
+    <div class="stat"><div class="stat-n" id="tiempo">0s</div><div class="stat-l">tiempo</div></div>
+    <div class="stat"><div class="stat-n" id="errores">0</div><div class="stat-l">errores</div></div>
+  </div>
+
+  <button class="btn idle" id="btn" onclick="toggleLectura()">🎤 Pulsa para leer</button>
+
+  <div class="result" id="result">
+    <div class="result-title">🌟 ¡Muy bien, Alejandro!</div>
+    <div class="result-grid">
+      <div class="result-item"><div class="result-n" id="r-ppm">—</div><div class="result-l">palabras por minuto</div></div>
+      <div class="result-item"><div class="result-n" id="r-prec">—</div><div class="result-l">precisión</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const palabras = "Las abejas son insectos que viven en colonias. Dentro de la colmena trabajan juntas para producir miel. La abeja reina pone huevos y las obreras cuidan la colmena. Recogen el néctar de las flores y lo transforman en miel.".split(" ");
+
+const texto = document.getElementById("texto");
+palabras.forEach((p, i) => {
+  const span = document.createElement("span");
+  span.className = "word";
+  span.id = "w" + i;
+  span.textContent = p + " ";
+  texto.appendChild(span);
+});
+
+let grabando = false;
+let timer, simTimer, segundos = 0, idx = 0, errores = 0;
+
+function toggleLectura() {
+  if (!grabando) iniciar(); else parar();
+}
+
+function iniciar() {
+  grabando = true;
+  const btn = document.getElementById("btn");
+  btn.className = "btn recording";
+  btn.textContent = "⏹ Leyendo... pulsa para terminar";
+  document.getElementById("mascot").textContent = "🎤";
+  document.getElementById("msg").textContent = "¡Te escucho! Sigue leyendo...";
+
+  timer = setInterval(() => {
+    segundos++;
+    document.getElementById("tiempo").textContent = segundos + "s";
+    if (segundos > 2 && idx > 0) {
+      document.getElementById("ppm").textContent = Math.round((idx / segundos) * 60);
+    }
+  }, 1000);
+
+  simTimer = setInterval(() => {
+    if (idx < palabras.length) {
+      if (idx > 0) document.getElementById("w"+(idx-1)).className = "word done";
+      const w = document.getElementById("w"+idx);
+      // simula un error aleatorio ocasional
+      if (Math.random() < 0.08) { w.className = "word error"; errores++; document.getElementById("errores").textContent = errores; }
+      else w.className = "word current";
+      idx++;
+      const pct = Math.round((idx / palabras.length) * 100);
+      document.getElementById("prog").style.width = pct + "%";
+      document.getElementById("prog-label").textContent = idx + " de " + palabras.length + " palabras";
+    } else {
+      parar();
+    }
+  }, 300);
+}
+
+function parar() {
+  grabando = false;
+  clearInterval(timer); clearInterval(simTimer);
+  palabras.forEach((_, i) => { const w = document.getElementById("w"+i); if (!w.classList.contains("error")) w.className = "word done"; });
+  document.getElementById("prog").style.width = "100%";
+  document.getElementById("prog-label").textContent = palabras.length + " de " + palabras.length + " palabras";
+  const ppmFinal = Math.round((palabras.length / segundos) * 60);
+  const precFinal = Math.round(((palabras.length - errores) / palabras.length) * 100);
+  document.getElementById("btn").className = "btn finished";
+  document.getElementById("btn").textContent = "✓ Lectura completada";
+  document.getElementById("btn").disabled = true;
+  document.getElementById("mascot").textContent = "🌟";
+  document.getElementById("msg").textContent = "¡Genial! Mira tus resultados";
+  document.getElementById("r-ppm").textContent = ppmFinal;
+  document.getElementById("r-prec").textContent = precFinal + "%";
+  document.getElementById("result").classList.add("show");
+}
+</script>
+</body>
+</html>
