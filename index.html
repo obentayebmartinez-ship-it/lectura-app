@@ -188,6 +188,8 @@ const lecturas = [
 
 // Elegir lectura según curso del alumno
 const cursoAlumno = localStorage.getItem("alumno_curso") || "2P";
+const keyGuardada = localStorage.getItem("openai_key");
+if (keyGuardada) document.getElementById("apikey").value = keyGuardada;
 const lecturasDelCurso = lecturas.filter(l => l.curso === cursoAlumno);
 const lecturaActual = lecturasDelCurso[Math.floor(Math.random() * lecturasDelCurso.length)];
 const textOriginal = lecturaActual.texto;
@@ -212,7 +214,9 @@ function toggleLectura() {
 }
 
 async function iniciar() {
-  const apikey = document.getElementById("apikey").value.trim();
+    const apikey = document.getElementById("apikey").value.trim();
+if (!apikey) { alert("Introduce tu API key de OpenAI primero"); return; }
+localStorage.setItem("openai_key", apikey);
   if (!apikey) { alert("Introduce tu API key de OpenAI primero"); return; }
   const alumno = document.getElementById("alumno").value.trim();
   if (!alumno) { alert("Introduce el nombre del alumno primero"); return; }
@@ -251,6 +255,8 @@ async function parar() {
     formData.append("model", "whisper-1");
     formData.append("language", "es");
     const apikey = document.getElementById("apikey").value.trim();
+if (!apikey) { alert("Introduce tu API key de OpenAI primero"); return; }
+localStorage.setItem("openai_key", apikey);
     const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
       method: "POST",
       headers: { "Authorization": "Bearer " + apikey },
