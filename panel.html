@@ -6,6 +6,7 @@
   <title>LectorIA — Panel Docente</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: system-ui, sans-serif; background: #f5f5f0; padding: 1.5rem; }
@@ -31,6 +32,9 @@
     .barra-wrap { background: #f3f4f6; border-radius: 4px; height: 8px; width: 120px; overflow: hidden; }
     .barra-fill { height: 100%; border-radius: 4px; }
     .loading { text-align: center; color: #9ca3af; font-size: 14px; padding: 2rem; }
+    .btn-pdf { font-size: 11px; padding: 4px 10px; border-radius: 8px; border: 1px solid #d1d5db; background: white; color: #374151; cursor: pointer; margin-left: 8px; }
+    .btn-pdf:hover { background: #f9fafb; }
+    .alumno-derecha { display: flex; align-items: center; gap: 6px; }
     @media (max-width: 600px) { .grid-4 { grid-template-columns: 1fr 1fr; } .grid-2 { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -89,6 +93,8 @@ const SUPABASE_URL = "https://mvwuyxrlkyikfgxzokxv.supabase.co";
 const SUPABASE_KEY = "sb_publishable_SNSZe5l2R3jcxiHxcxEqgg_XBrW-Xvi";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+let todosLosDatos = [];
+
 async function cargarDatos() {
   const { data, error } = await sb.from("sesiones").select("*").order("fecha", { ascending: true });
   if (error || !data || data.length === 0) {
@@ -96,7 +102,8 @@ async function cargarDatos() {
     return;
   }
 
-  // Métricas generales
+  todosLosDatos = data;
+
   const ppmMedio = Math.round(data.reduce((s, r) => s + r.ppm, 0) / data.length);
   const precMedia = Math.round(data.reduce((s, r) => s + r.precision, 0) / data.length);
   const alumnos = [...new Set(data.map(r => r.alumno))];
@@ -105,7 +112,6 @@ async function cargarDatos() {
   document.getElementById("total-sesiones").textContent = data.length;
   document.getElementById("alumnos-activos").textContent = alumnos.length;
 
-  // Gráfica evolución PPM
   const labels = data.map(r => new Date(r.fecha).toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit" }));
   const ppms = data.map(r => r.ppm);
   new Chart(document.getElementById("chartPPM"), {
@@ -141,7 +147,6 @@ async function cargarDatos() {
     }
   });
 
-  // Lista alumnos última sesión
   const ultimasSesiones = {};
   data.forEach(r => { ultimasSesiones[r.alumno] = r; });
   const listaHTML = Object.values(ultimasSesiones).map(r => {
@@ -153,12 +158,14 @@ async function cargarDatos() {
           <div class="alumno-nombre">${r.alumno}</div>
           <div class="alumno-ppm">${r.ppm} PPM · ${r.precision}% precisión</div>
         </div>
-        <span class="badge ${badge}">${texto}</span>
+        <div class="alumno-derecha">
+          <span class="badge ${badge}">${texto}</span>
+          <button class="btn-pdf" onclick="generarPDF('${r.alumno}')">📄 PDF</button>
+        </div>
       </div>`;
   }).join("");
   document.getElementById("lista-alumnos").innerHTML = listaHTML;
 
-  // Errores acumulados
   const totalOmisiones = data.reduce((s, r) => s + r.omisiones, 0);
   const totalSustituciones = data.reduce((s, r) => s + r.sustituciones, 0);
   const totalRepeticiones = data.reduce((s, r) => s + r.repeticiones, 0);
@@ -186,7 +193,6 @@ async function cargarDatos() {
       </div>
     </div>`;
 
-  // Gráfica distribución PPM
   const rangos = { "40-60": 0, "60-80": 0, "80-100": 0, "100+": 0 };
   data.forEach(r => {
     if (r.ppm < 60) rangos["40-60"]++;
@@ -213,6 +219,141 @@ async function cargarDatos() {
       }
     }
   });
+}
+
+function generarPDF(nombreAlumno) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  const sesiones = todosLosDatos.filter(r => r.alumno === nombreAlumno);
+  const ultima = sesiones[sesiones.length - 1];
+  const fecha = new Date().toLocaleDateString("es-ES");
+  const objetivo = 90;
+  const estado = ultima.ppm >= objetivo ? "En nivel" : ultima.ppm >= 70 ? "Cerca del nivel" : "Necesita apoyo";
+  const recomendacion = ultima.ppm >= objetivo
+    ? "El alumno ha alcanzado el nivel esperado para su curso. Se recomienda mantener la práctica diaria y avanzar a textos de mayor complejidad."
+    : ultima.ppm >= 70
+    ? "El alumno está cerca del objetivo. Se recomienda práctica diaria de 10 minutos con lecturas de su nivel actual."
+    : "El alumno necesita apoyo adicional. Se recomienda sesiones de lectura guiada y revisión con el orientador educativo.";
+
+  // Cabecera
+  doc.setFillColor(16, 185, 129);
+  doc.rect(0, 0, 210, 28, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(18);
+  doc.setFont("helvetica", "bold");
+  doc.text("LectorIA", 14, 12);
+  doc.setFontSize(11);
+  doc.setFont("helvetica", "normal");
+  doc.text("Informe de Velocidad Lectora", 14, 21);
+  doc.text(fecha, 196, 21, { align: "right" });
+
+  // Datos alumno
+  doc.setTextColor(17, 17, 17);
+  doc.setFontSize(16);
+  doc.setFont("helvetica", "bold");
+  doc.text(nombreAlumno, 14, 42);
+  doc.setFontSize(11);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(107, 114, 128);
+  doc.text(`Nivel 2º Primaria  ·  ${sesiones.length} sesión(es) completada(s)`, 14, 50);
+
+  // Métricas
+  doc.setFillColor(249, 250, 251);
+  doc.roundedRect(14, 58, 85, 30, 4, 4, "F");
+  doc.roundedRect(111, 58, 85, 30, 4, 4, "F");
+
+  doc.setTextColor(107, 114, 128);
+  doc.setFontSize(9);
+  doc.text("PPM ACTUAL", 20, 66);
+  doc.text("OBJETIVO CURSO", 117, 66);
+  doc.setTextColor(17, 17, 17);
+  doc.setFontSize(24);
+  doc.setFont("helvetica", "bold");
+  doc.text(String(ultima.ppm), 20, 82);
+  doc.text(String(objetivo), 117, 82);
+
+  // Estado
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+  const estadoColor = ultima.ppm >= objetivo ? [6, 95, 70] : ultima.ppm >= 70 ? [133, 77, 14] : [153, 27, 27];
+  doc.setTextColor(...estadoColor);
+  doc.text(`Estado: ${estado}`, 14, 100);
+
+  // Separador
+  doc.setDrawColor(229, 231, 235);
+  doc.line(14, 106, 196, 106);
+
+  // Errores
+  doc.setTextColor(17, 17, 17);
+  doc.setFontSize(12);
+  doc.setFont("helvetica", "bold");
+  doc.text("Detalle de errores", 14, 116);
+
+  const errores = [
+    { label: "Omisiones", valor: ultima.omisiones, color: [252, 165, 165] },
+    { label: "Sustituciones", valor: ultima.sustituciones, color: [253, 230, 138] },
+    { label: "Repeticiones", valor: ultima.repeticiones, color: [221, 214, 254] }
+  ];
+
+  errores.forEach((e, i) => {
+    const y = 126 + i * 14;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(55, 65, 81);
+    doc.text(e.label, 14, y);
+    doc.setFillColor(...e.color);
+    doc.roundedRect(80, y - 6, 60, 8, 2, 2, "F");
+    doc.setTextColor(17, 17, 17);
+    doc.text(String(e.valor), 112, y, { align: "center" });
+  });
+
+  // Evolución sesiones
+  if (sesiones.length > 1) {
+    doc.setDrawColor(229, 231, 235);
+    doc.line(14, 172, 196, 172);
+    doc.setTextColor(17, 17, 17);
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text("Evolución de sesiones", 14, 182);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(107, 114, 128);
+    doc.text("Fecha", 14, 192);
+    doc.text("PPM", 80, 192);
+    doc.text("Precisión", 120, 192);
+    doc.text("Errores", 170, 192);
+    sesiones.forEach((s, i) => {
+      const y = 200 + i * 10;
+      const fechaS = new Date(s.fecha).toLocaleDateString("es-ES");
+      doc.setTextColor(55, 65, 81);
+      doc.text(fechaS, 14, y);
+      doc.text(String(s.ppm), 80, y);
+      doc.text(s.precision + "%", 120, y);
+      doc.text(String(s.omisiones + s.sustituciones + s.repeticiones), 170, y);
+    });
+  }
+
+  // Recomendación
+  const yRec = sesiones.length > 1 ? 200 + sesiones.length * 10 + 10 : 172;
+  doc.setDrawColor(229, 231, 235);
+  doc.line(14, yRec, 196, yRec);
+  doc.setFillColor(240, 253, 244);
+  doc.roundedRect(14, yRec + 8, 182, 30, 4, 4, "F");
+  doc.setTextColor(22, 101, 52);
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.text("Recomendación", 20, yRec + 18);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  const lines = doc.splitTextToSize(recomendacion, 170);
+  doc.text(lines, 20, yRec + 26);
+
+  // Pie
+  doc.setTextColor(156, 163, 175);
+  doc.setFontSize(8);
+  doc.text("Generado por LectorIA · Plataforma de estimulación lectora", 105, 285, { align: "center" });
+
+  doc.save(`informe_${nombreAlumno.replace(/ /g,"_")}_${fecha.replace(/\//g,"-")}.pdf`);
 }
 
 cargarDatos();
