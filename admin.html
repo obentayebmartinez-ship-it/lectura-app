@@ -22,7 +22,6 @@
     .metric-value { font-size: 26px; font-weight: 500; color: #111; }
     .metric-sub { font-size: 11px; color: #9ca3af; margin-top: 2px; }
     .metric-value.green { color: #1D9E75; }
-    .metric-value.red { color: #E24B4A; }
     .card-title { font-size: 14px; font-weight: 500; color: #111; margin-bottom: 1rem; }
     .user-fila { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 0.5px solid #f3f4f6; font-size: 13px; }
     .user-fila:last-child { border-bottom: none; }
@@ -31,9 +30,6 @@
     .user-derecha { text-align: right; }
     .user-sesiones { font-size: 15px; font-weight: 500; color: #111; }
     .user-coste { font-size: 11px; color: #9ca3af; margin-top: 2px; }
-    .badge { font-size: 11px; padding: 3px 10px; border-radius: 20px; font-weight: 500; }
-    .badge-active { background: #E1F5EE; color: #0F6E56; }
-    .badge-inactive { background: #f3f4f6; color: #6b7280; }
     .loading { text-align: center; color: #9ca3af; font-size: 13px; padding: 2rem; }
     .password-screen { max-width: 380px; margin: 4rem auto; background: #fff; border: 0.5px solid #e5e7eb; border-radius: 16px; padding: 2rem; text-align: center; }
     .password-title { font-size: 18px; font-weight: 500; color: #111; margin-bottom: 0.5rem; }
@@ -60,10 +56,7 @@
 
   <div class="topbar">
     <div style="display:flex;align-items:center;gap:10px;">
-      <div class="brand">
-        <div class="brand-dot"></div>
-        <span class="brand-name">LectorIA</span>
-      </div>
+      <div class="brand"><div class="brand-dot"></div><span class="brand-name">LectorIA</span></div>
       <span class="admin-badge">Admin</span>
     </div>
     <button class="btn-logout" onclick="window.location.href='panel.html'">← Panel</button>
@@ -98,14 +91,19 @@
       <canvas id="chartDiario" height="200"></canvas>
     </div>
     <div class="card">
-      <div class="card-title">Usuarios por actividad</div>
+      <div class="card-title">Actividad por alumno</div>
       <div id="lista-usuarios"><div class="loading">Cargando...</div></div>
     </div>
   </div>
 
-  <div class="card">
-    <div class="card-title">Detalle por usuario</div>
+  <div class="card" style="margin-bottom:1.5rem;">
+    <div class="card-title">Detalle por usuario (docente)</div>
     <div id="lista-detalle"><div class="loading">Cargando...</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📊 Bloque estadístico global</div>
+    <div id="bloque-stats"><div class="loading">Cargando...</div></div>
   </div>
 
 </div>
@@ -114,7 +112,6 @@
 const SUPABASE_URL = "https://mvwuyxrlkyikfgxzokxv.supabase.co";
 const SUPABASE_KEY = "sb_publishable_SNSZe5l2R3jcxiHxcxEqgg_XBrW-Xvi";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
 const ADMIN_PASSWORD = "lectoria2024admin";
 
 function verificarPassword() {
@@ -134,9 +131,11 @@ async function cargarDatos() {
 
   if (!sesiones || sesiones.length === 0) {
     document.getElementById("lista-usuarios").innerHTML = "<div class='loading'>No hay datos todavía</div>";
+    document.getElementById("lista-detalle").innerHTML = "<div class='loading'>No hay datos todavía</div>";
     return;
   }
 
+  // Métricas globales
   const hoy = new Date().toLocaleDateString("es-ES");
   const sesionesHoy = sesiones.filter(s => new Date(s.fecha).toLocaleDateString("es-ES") === hoy);
   const gastoEstimado = (sesiones.length * 2 * 0.006).toFixed(2);
@@ -146,30 +145,19 @@ async function cargarDatos() {
   document.getElementById("total-sesiones").textContent = sesiones.length;
   document.getElementById("gasto-total").textContent = "$" + gastoEstimado;
   document.getElementById("sesiones-hoy").textContent = sesionesHoy.length;
-  document.getElementById("sesiones-hoy-sub").textContent = sesionesHoy.length === 1 ? "lectura hoy" : "lecturas hoy";
 
-  // Gráfica uso diario últimos 14 días
-  const dias = [];
-  const counts = [];
+  // Gráfica uso diario
+  const dias = [], counts = [];
   for (let i = 13; i >= 0; i--) {
     const d = new Date();
     d.setDate(d.getDate() - i);
-    const label = d.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit" });
+    dias.push(d.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit" }));
     const dateStr = d.toISOString().split("T")[0];
-    dias.push(label);
     counts.push(sesiones.filter(s => s.fecha && s.fecha.startsWith(dateStr)).length);
   }
-
   new Chart(document.getElementById("chartDiario"), {
     type: "bar",
-    data: {
-      labels: dias,
-      datasets: [{
-        data: counts,
-        backgroundColor: "rgba(29,158,117,0.7)",
-        borderRadius: 4
-      }]
-    },
+    data: { labels: dias, datasets: [{ data: counts, backgroundColor: "rgba(29,158,117,0.7)", borderRadius: 4 }] },
     options: {
       responsive: true,
       plugins: { legend: { display: false } },
@@ -180,19 +168,15 @@ async function cargarDatos() {
     }
   });
 
-  // Usuarios por actividad
+  // Actividad por alumno
   const porAlumno = {};
   sesiones.forEach(s => {
     if (!porAlumno[s.alumno]) porAlumno[s.alumno] = { sesiones: 0, ultima: s.fecha };
     porAlumno[s.alumno].sesiones++;
     if (s.fecha > porAlumno[s.alumno].ultima) porAlumno[s.alumno].ultima = s.fecha;
   });
-
   const ordenados = Object.entries(porAlumno).sort((a, b) => b[1].sesiones - a[1].sesiones);
-
   document.getElementById("lista-usuarios").innerHTML = ordenados.slice(0, 8).map(([nombre, d]) => {
-    const diasDesde = Math.floor((Date.now() - new Date(d.ultima)) / 86400000);
-    const activo = diasDesde <= 7;
     const ultimaFecha = new Date(d.ultima).toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit" });
     return `
       <div class="user-fila">
@@ -207,42 +191,83 @@ async function cargarDatos() {
       </div>`;
   }).join("");
 
-  // Detalle completo
-  const costoTotal = sesiones.length * 2 * 0.006;
+  // Detalle por docente
+  const porDocente = {};
+  if (alumnos) {
+    alumnos.forEach(a => {
+      if (!porDocente[a.user_id]) porDocente[a.user_id] = { alumnos: new Set(), sesiones: 0, email: a.user_id.substring(0,8) + "..." };
+      porDocente[a.user_id].alumnos.add(a.nombre);
+    });
+  }
+  sesiones.forEach(s => {
+    const alumno = alumnos ? alumnos.find(a => a.nombre === s.alumno) : null;
+    const uid = alumno ? alumno.user_id : "sin-cuenta";
+    if (!porDocente[uid]) porDocente[uid] = { alumnos: new Set(), sesiones: 0, email: uid.substring(0,8) + "..." };
+    porDocente[uid].sesiones++;
+  });
+
   document.getElementById("lista-detalle").innerHTML = `
     <table style="width:100%;border-collapse:collapse;font-size:13px;">
       <thead>
         <tr style="border-bottom:0.5px solid #e5e7eb;">
-          <th style="text-align:left;padding:8px 0;font-weight:500;color:#6b7280;font-size:11px;">Alumno</th>
+          <th style="text-align:left;padding:8px 0;font-weight:500;color:#6b7280;font-size:11px;">Usuario</th>
+          <th style="text-align:center;padding:8px 0;font-weight:500;color:#6b7280;font-size:11px;">Alumnos</th>
           <th style="text-align:center;padding:8px 0;font-weight:500;color:#6b7280;font-size:11px;">Sesiones</th>
-          <th style="text-align:center;padding:8px 0;font-weight:500;color:#6b7280;font-size:11px;">PPM medio</th>
-          <th style="text-align:center;padding:8px 0;font-weight:500;color:#6b7280;font-size:11px;">Errores totales</th>
           <th style="text-align:right;padding:8px 0;font-weight:500;color:#6b7280;font-size:11px;">Gasto est.</th>
         </tr>
       </thead>
       <tbody>
-        ${ordenados.map(([nombre, d]) => {
-          const sesAlumno = sesiones.filter(s => s.alumno === nombre);
-          const ppmMedio = Math.round(sesAlumno.reduce((sum, s) => sum + (s.ppm||0), 0) / sesAlumno.length);
-          const errTotal = sesAlumno.reduce((sum, s) => sum + (s.omisiones||0) + (s.sustituciones||0) + (s.repeticiones||0), 0);
-          const coste = (d.sesiones * 2 * 0.006).toFixed(3);
-          return `
-            <tr style="border-bottom:0.5px solid #f3f4f6;">
-              <td style="padding:8px 0;color:#111;font-weight:500;">${nombre}</td>
-              <td style="text-align:center;padding:8px 0;color:#374151;">${d.sesiones}</td>
-              <td style="text-align:center;padding:8px 0;color:#374151;">${ppmMedio} PPM</td>
-              <td style="text-align:center;padding:8px 0;color:#374151;">${errTotal}</td>
-              <td style="text-align:right;padding:8px 0;color:#1D9E75;font-weight:500;">$${coste}</td>
-            </tr>`;
-        }).join("")}
+        ${Object.entries(porDocente).map(([uid, d]) => `
+          <tr style="border-bottom:0.5px solid #f3f4f6;">
+            <td style="padding:8px 0;color:#111;font-weight:500;">${d.email}</td>
+            <td style="text-align:center;padding:8px 0;color:#374151;">${d.alumnos.size}</td>
+            <td style="text-align:center;padding:8px 0;color:#374151;">${d.sesiones}</td>
+            <td style="text-align:right;padding:8px 0;color:#1D9E75;font-weight:500;">$${(d.sesiones * 2 * 0.006).toFixed(3)}</td>
+          </tr>`).join("")}
         <tr style="border-top:1px solid #e5e7eb;">
           <td style="padding:10px 0;font-weight:500;color:#111;">TOTAL</td>
+          <td style="text-align:center;padding:10px 0;font-weight:500;">${alumnos ? [...new Set(alumnos.map(a => a.nombre))].length : "—"}</td>
           <td style="text-align:center;padding:10px 0;font-weight:500;">${sesiones.length}</td>
-          <td></td><td></td>
-          <td style="text-align:right;padding:10px 0;font-weight:500;color:#E24B4A;">$${costoTotal.toFixed(3)}</td>
+          <td style="text-align:right;padding:10px 0;font-weight:500;color:#E24B4A;">$${(sesiones.length * 2 * 0.006).toFixed(3)}</td>
         </tr>
       </tbody>
     </table>`;
+
+  // Bloque estadístico global
+  const sesVal = sesiones.filter(s => s.ppm > 0);
+  const ppmGlobal = sesVal.length ? Math.round(sesVal.reduce((s, r) => s + r.ppm, 0) / sesVal.length) : 0;
+  const precGlobal = sesVal.length ? Math.round(sesVal.reduce((s, r) => s + r.precision, 0) / sesVal.length) : 0;
+  const omGlobal = sesiones.reduce((s, r) => s + (r.omisiones||0), 0);
+  const stGlobal = sesiones.reduce((s, r) => s + (r.sustituciones||0), 0);
+  const repGlobal = sesiones.reduce((s, r) => s + (r.repeticiones||0), 0);
+
+  document.getElementById("bloque-stats").innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
+      <div style="background:#f9fafb;border-radius:10px;padding:12px;text-align:center;">
+        <div style="font-size:22px;font-weight:500;color:#1D9E75;">${ppmGlobal}</div>
+        <div style="font-size:11px;color:#9ca3af;margin-top:2px;">PPM medio global</div>
+      </div>
+      <div style="background:#f9fafb;border-radius:10px;padding:12px;text-align:center;">
+        <div style="font-size:22px;font-weight:500;color:#378ADD;">${precGlobal}%</div>
+        <div style="font-size:11px;color:#9ca3af;margin-top:2px;">Precisión media</div>
+      </div>
+      <div style="background:#f9fafb;border-radius:10px;padding:12px;text-align:center;">
+        <div style="font-size:22px;font-weight:500;color:#111;">${sesiones.length}</div>
+        <div style="font-size:11px;color:#9ca3af;margin-top:2px;">Sesiones totales</div>
+      </div>
+      <div style="background:#FCEBEB;border-radius:10px;padding:12px;text-align:center;">
+        <div style="font-size:22px;font-weight:500;color:#791F1F;">${omGlobal}</div>
+        <div style="font-size:11px;color:#F09595;margin-top:2px;">Omisiones totales</div>
+      </div>
+      <div style="background:#FAEEDA;border-radius:10px;padding:12px;text-align:center;">
+        <div style="font-size:22px;font-weight:500;color:#633806;">${stGlobal}</div>
+        <div style="font-size:11px;color:#EF9F27;margin-top:2px;">Sustituciones totales</div>
+      </div>
+      <div style="background:#EEEDFE;border-radius:10px;padding:12px;text-align:center;">
+        <div style="font-size:22px;font-weight:500;color:#3C3489;">${repGlobal}</div>
+        <div style="font-size:11px;color:#AFA9EC;margin-top:2px;">Repeticiones totales</div>
+      </div>
+    </div>`;
 }
 </script>
 </body>
