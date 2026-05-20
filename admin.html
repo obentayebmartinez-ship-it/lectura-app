@@ -53,7 +53,6 @@
 </div>
 
 <div id="admin-panel" style="display:none">
-
   <div class="topbar">
     <div style="display:flex;align-items:center;gap:10px;">
       <div class="brand"><div class="brand-dot"></div><span class="brand-name">LectorIA</span></div>
@@ -63,37 +62,15 @@
   </div>
 
   <div class="grid-4">
-    <div class="card">
-      <div class="metric-label">Total usuarios</div>
-      <div class="metric-value" id="total-usuarios">—</div>
-      <div class="metric-sub">registrados</div>
-    </div>
-    <div class="card">
-      <div class="metric-label">Total sesiones</div>
-      <div class="metric-value" id="total-sesiones">—</div>
-      <div class="metric-sub">lecturas completadas</div>
-    </div>
-    <div class="card">
-      <div class="metric-label">Gasto estimado</div>
-      <div class="metric-value green" id="gasto-total">—</div>
-      <div class="metric-sub">a 0.006$/min · ~2min/sesión</div>
-    </div>
-    <div class="card">
-      <div class="metric-label">Sesiones hoy</div>
-      <div class="metric-value" id="sesiones-hoy">—</div>
-      <div class="metric-sub" id="sesiones-hoy-sub">lecturas hoy</div>
-    </div>
+    <div class="card"><div class="metric-label">Total usuarios</div><div class="metric-value" id="total-usuarios">—</div><div class="metric-sub">registrados</div></div>
+    <div class="card"><div class="metric-label">Total sesiones</div><div class="metric-value" id="total-sesiones">—</div><div class="metric-sub">lecturas completadas</div></div>
+    <div class="card"><div class="metric-label">Gasto estimado</div><div class="metric-value green" id="gasto-total">—</div><div class="metric-sub">a 0.006$/min · ~2min/sesión</div></div>
+    <div class="card"><div class="metric-label">Sesiones hoy</div><div class="metric-value" id="sesiones-hoy">—</div><div class="metric-sub" id="sesiones-hoy-sub">lecturas hoy</div></div>
   </div>
 
   <div class="grid-2">
-    <div class="card">
-      <div class="card-title">Uso diario — últimos 14 días</div>
-      <canvas id="chartDiario" height="200"></canvas>
-    </div>
-    <div class="card">
-      <div class="card-title">Actividad por alumno</div>
-      <div id="lista-usuarios"><div class="loading">Cargando...</div></div>
-    </div>
+    <div class="card"><div class="card-title">Uso diario — últimos 14 días</div><canvas id="chartDiario" height="200"></canvas></div>
+    <div class="card"><div class="card-title">Actividad por alumno</div><div id="lista-usuarios"><div class="loading">Cargando...</div></div></div>
   </div>
 
   <div class="card" style="margin-bottom:1.5rem;">
@@ -105,7 +82,6 @@
     <div class="card-title">📊 Bloque estadístico global</div>
     <div id="bloque-stats"><div class="loading">Cargando...</div></div>
   </div>
-
 </div>
 
 <script>
@@ -132,18 +108,17 @@ async function cargarDatos() {
   if (!sesiones || sesiones.length === 0) {
     document.getElementById("lista-usuarios").innerHTML = "<div class='loading'>No hay datos todavía</div>";
     document.getElementById("lista-detalle").innerHTML = "<div class='loading'>No hay datos todavía</div>";
+    document.getElementById("bloque-stats").innerHTML = "<div class='loading'>No hay datos todavía</div>";
     return;
   }
 
   // Métricas globales
   const hoy = new Date().toLocaleDateString("es-ES");
   const sesionesHoy = sesiones.filter(s => new Date(s.fecha).toLocaleDateString("es-ES") === hoy);
-  const gastoEstimado = (sesiones.length * 2 * 0.006).toFixed(2);
   const usuariosUnicos = [...new Set(alumnos ? alumnos.map(a => a.user_id) : [])];
-
   document.getElementById("total-usuarios").textContent = usuariosUnicos.length || "—";
   document.getElementById("total-sesiones").textContent = sesiones.length;
-  document.getElementById("gasto-total").textContent = "$" + gastoEstimado;
+  document.getElementById("gasto-total").textContent = "$" + (sesiones.length * 2 * 0.006).toFixed(2);
   document.getElementById("sesiones-hoy").textContent = sesionesHoy.length;
 
   // Gráfica uso diario
@@ -158,14 +133,7 @@ async function cargarDatos() {
   new Chart(document.getElementById("chartDiario"), {
     type: "bar",
     data: { labels: dias, datasets: [{ data: counts, backgroundColor: "rgba(29,158,117,0.7)", borderRadius: 4 }] },
-    options: {
-      responsive: true,
-      plugins: { legend: { display: false } },
-      scales: {
-        y: { ticks: { stepSize: 1, font: { size: 11 }, color: "#9ca3af" }, grid: { color: "rgba(0,0,0,0.04)" } },
-        x: { ticks: { font: { size: 10 }, color: "#9ca3af" }, grid: { display: false } }
-      }
-    }
+    options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { ticks: { stepSize: 1, font: { size: 11 }, color: "#9ca3af" }, grid: { color: "rgba(0,0,0,0.04)" } }, x: { ticks: { font: { size: 10 }, color: "#9ca3af" }, grid: { display: false } } } }
   });
 
   // Actividad por alumno
@@ -178,48 +146,36 @@ async function cargarDatos() {
   const ordenados = Object.entries(porAlumno).sort((a, b) => b[1].sesiones - a[1].sesiones);
   document.getElementById("lista-usuarios").innerHTML = ordenados.slice(0, 8).map(([nombre, d]) => {
     const ultimaFecha = new Date(d.ultima).toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit" });
-    return `
-      <div class="user-fila">
-        <div>
-          <div class="user-email">${nombre}</div>
-          <div class="user-meta">Última sesión: ${ultimaFecha}</div>
-        </div>
-        <div class="user-derecha">
-          <div class="user-sesiones">${d.sesiones} lecturas</div>
-          <div class="user-coste">~$${(d.sesiones * 2 * 0.006).toFixed(3)}</div>
-        </div>
-      </div>`;
+    return `<div class="user-fila"><div><div class="user-email">${nombre}</div><div class="user-meta">Última sesión: ${ultimaFecha}</div></div><div class="user-derecha"><div class="user-sesiones">${d.sesiones} lecturas</div><div class="user-coste">~$${(d.sesiones * 2 * 0.006).toFixed(3)}</div></div></div>`;
   }).join("");
 
   // Detalle por docente
   const porDocente = {};
   if (alumnos) {
     alumnos.forEach(a => {
-      if (!porDocente[a.user_id]) porDocente[a.user_id] = { alumnos: new Set(), sesiones: 0, email: a.user_id.substring(0,8) + "..." };
+      if (!porDocente[a.user_id]) porDocente[a.user_id] = { alumnos: new Set(), sesiones: 0 };
       porDocente[a.user_id].alumnos.add(a.nombre);
     });
   }
   sesiones.forEach(s => {
     const alumno = alumnos ? alumnos.find(a => a.nombre === s.alumno) : null;
     const uid = alumno ? alumno.user_id : "sin-cuenta";
-    if (!porDocente[uid]) porDocente[uid] = { alumnos: new Set(), sesiones: 0, email: uid.substring(0,8) + "..." };
+    if (!porDocente[uid]) porDocente[uid] = { alumnos: new Set(), sesiones: 0 };
     porDocente[uid].sesiones++;
   });
 
   document.getElementById("lista-detalle").innerHTML = `
     <table style="width:100%;border-collapse:collapse;font-size:13px;">
-      <thead>
-        <tr style="border-bottom:0.5px solid #e5e7eb;">
-          <th style="text-align:left;padding:8px 0;font-weight:500;color:#6b7280;font-size:11px;">Usuario</th>
-          <th style="text-align:center;padding:8px 0;font-weight:500;color:#6b7280;font-size:11px;">Alumnos</th>
-          <th style="text-align:center;padding:8px 0;font-weight:500;color:#6b7280;font-size:11px;">Sesiones</th>
-          <th style="text-align:right;padding:8px 0;font-weight:500;color:#6b7280;font-size:11px;">Gasto est.</th>
-        </tr>
-      </thead>
+      <thead><tr style="border-bottom:0.5px solid #e5e7eb;">
+        <th style="text-align:left;padding:8px 0;font-weight:500;color:#6b7280;font-size:11px;">Usuario</th>
+        <th style="text-align:center;padding:8px 0;font-weight:500;color:#6b7280;font-size:11px;">Alumnos</th>
+        <th style="text-align:center;padding:8px 0;font-weight:500;color:#6b7280;font-size:11px;">Sesiones</th>
+        <th style="text-align:right;padding:8px 0;font-weight:500;color:#6b7280;font-size:11px;">Gasto est.</th>
+      </tr></thead>
       <tbody>
         ${Object.entries(porDocente).map(([uid, d]) => `
           <tr style="border-bottom:0.5px solid #f3f4f6;">
-            <td style="padding:8px 0;color:#111;font-weight:500;">${d.email}</td>
+            <td style="padding:8px 0;color:#111;font-weight:500;">${uid.substring(0,8)}...</td>
             <td style="text-align:center;padding:8px 0;color:#374151;">${d.alumnos.size}</td>
             <td style="text-align:center;padding:8px 0;color:#374151;">${d.sesiones}</td>
             <td style="text-align:right;padding:8px 0;color:#1D9E75;font-weight:500;">$${(d.sesiones * 2 * 0.006).toFixed(3)}</td>
@@ -233,7 +189,7 @@ async function cargarDatos() {
       </tbody>
     </table>`;
 
-  // Bloque estadístico global
+  // Estadísticas globales
   const sesVal = sesiones.filter(s => s.ppm > 0);
   const ppmGlobal = sesVal.length ? Math.round(sesVal.reduce((s, r) => s + r.ppm, 0) / sesVal.length) : 0;
   const precGlobal = sesVal.length ? Math.round(sesVal.reduce((s, r) => s + r.precision, 0) / sesVal.length) : 0;
@@ -241,32 +197,80 @@ async function cargarDatos() {
   const stGlobal = sesiones.reduce((s, r) => s + (r.sustituciones||0), 0);
   const repGlobal = sesiones.reduce((s, r) => s + (r.repeticiones||0), 0);
 
+  // Baremos por curso
+  const cursos = ["1P", "2P", "3P", "4P", "5P", "6P"];
+  const nombresCurso = { "1P": "1º Primaria", "2P": "2º Primaria", "3P": "3º Primaria", "4P": "4º Primaria", "5P": "5º Primaria", "6P": "6º Primaria" };
+  const objetivos = { "1P": 65, "2P": 90, "3P": 105, "4P": 115, "5P": 125, "6P": 135 };
+
+  const baremosPorCurso = {};
+  cursos.forEach(curso => {
+    const alumnosCurso = alumnos ? alumnos.filter(a => a.curso === curso).map(a => a.nombre) : [];
+    const sesionesCurso = sesiones.filter(s => alumnosCurso.includes(s.alumno) && s.ppm > 0);
+    if (sesionesCurso.length > 0) {
+      baremosPorCurso[curso] = {
+        ppmMedio: Math.round(sesionesCurso.reduce((sum, s) => sum + s.ppm, 0) / sesionesCurso.length),
+        precMedio: Math.round(sesionesCurso.reduce((sum, s) => sum + s.precision, 0) / sesionesCurso.length),
+        omMedio: Math.round(sesionesCurso.reduce((sum, s) => sum + (s.omisiones||0), 0) / sesionesCurso.length),
+        stMedio: Math.round(sesionesCurso.reduce((sum, s) => sum + (s.sustituciones||0), 0) / sesionesCurso.length),
+        repMedio: Math.round(sesionesCurso.reduce((sum, s) => sum + (s.repeticiones||0), 0) / sesionesCurso.length),
+        numSesiones: sesionesCurso.length,
+        numAlumnos: alumnosCurso.length
+      };
+    }
+  });
+
+  const cursosConDatos = Object.keys(baremosPorCurso);
+
   document.getElementById("bloque-stats").innerHTML = `
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
-      <div style="background:#f9fafb;border-radius:10px;padding:12px;text-align:center;">
-        <div style="font-size:22px;font-weight:500;color:#1D9E75;">${ppmGlobal}</div>
-        <div style="font-size:11px;color:#9ca3af;margin-top:2px;">PPM medio global</div>
+    <div style="margin-bottom:1.25rem;">
+      <div style="font-size:13px;font-weight:500;color:#111;margin-bottom:0.75rem;">Datos globales</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
+        <div style="background:#f9fafb;border-radius:10px;padding:12px;text-align:center;"><div style="font-size:22px;font-weight:500;color:#1D9E75;">${ppmGlobal}</div><div style="font-size:11px;color:#9ca3af;margin-top:2px;">PPM medio global</div></div>
+        <div style="background:#f9fafb;border-radius:10px;padding:12px;text-align:center;"><div style="font-size:22px;font-weight:500;color:#378ADD;">${precGlobal}%</div><div style="font-size:11px;color:#9ca3af;margin-top:2px;">Precisión media</div></div>
+        <div style="background:#f9fafb;border-radius:10px;padding:12px;text-align:center;"><div style="font-size:22px;font-weight:500;color:#111;">${sesiones.length}</div><div style="font-size:11px;color:#9ca3af;margin-top:2px;">Sesiones totales</div></div>
+        <div style="background:#FCEBEB;border-radius:10px;padding:12px;text-align:center;"><div style="font-size:22px;font-weight:500;color:#791F1F;">${omGlobal}</div><div style="font-size:11px;color:#F09595;margin-top:2px;">Omisiones totales</div></div>
+        <div style="background:#FAEEDA;border-radius:10px;padding:12px;text-align:center;"><div style="font-size:22px;font-weight:500;color:#633806;">${stGlobal}</div><div style="font-size:11px;color:#EF9F27;margin-top:2px;">Sustituciones totales</div></div>
+        <div style="background:#EEEDFE;border-radius:10px;padding:12px;text-align:center;"><div style="font-size:22px;font-weight:500;color:#3C3489;">${repGlobal}</div><div style="font-size:11px;color:#AFA9EC;margin-top:2px;">Repeticiones totales</div></div>
       </div>
-      <div style="background:#f9fafb;border-radius:10px;padding:12px;text-align:center;">
-        <div style="font-size:22px;font-weight:500;color:#378ADD;">${precGlobal}%</div>
-        <div style="font-size:11px;color:#9ca3af;margin-top:2px;">Precisión media</div>
-      </div>
-      <div style="background:#f9fafb;border-radius:10px;padding:12px;text-align:center;">
-        <div style="font-size:22px;font-weight:500;color:#111;">${sesiones.length}</div>
-        <div style="font-size:11px;color:#9ca3af;margin-top:2px;">Sesiones totales</div>
-      </div>
-      <div style="background:#FCEBEB;border-radius:10px;padding:12px;text-align:center;">
-        <div style="font-size:22px;font-weight:500;color:#791F1F;">${omGlobal}</div>
-        <div style="font-size:11px;color:#F09595;margin-top:2px;">Omisiones totales</div>
-      </div>
-      <div style="background:#FAEEDA;border-radius:10px;padding:12px;text-align:center;">
-        <div style="font-size:22px;font-weight:500;color:#633806;">${stGlobal}</div>
-        <div style="font-size:11px;color:#EF9F27;margin-top:2px;">Sustituciones totales</div>
-      </div>
-      <div style="background:#EEEDFE;border-radius:10px;padding:12px;text-align:center;">
-        <div style="font-size:22px;font-weight:500;color:#3C3489;">${repGlobal}</div>
-        <div style="font-size:11px;color:#AFA9EC;margin-top:2px;">Repeticiones totales</div>
-      </div>
+    </div>
+    <div style="border-top:0.5px solid #e5e7eb;padding-top:1.25rem;">
+      <div style="font-size:13px;font-weight:500;color:#111;margin-bottom:0.75rem;">Baremo por curso <span style="font-size:11px;font-weight:400;color:#9ca3af;">— basado en datos reales de la plataforma</span></div>
+      ${cursosConDatos.length === 0
+        ? `<div style="text-align:center;color:#9ca3af;font-size:13px;padding:1.5rem;">Aún no hay suficientes datos por curso. Los baremos se irán construyendo con el uso.</div>`
+        : `<table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead><tr style="border-bottom:0.5px solid #e5e7eb;">
+              <th style="text-align:left;padding:8px 0;font-weight:500;color:#6b7280;font-size:11px;">Curso</th>
+              <th style="text-align:center;padding:8px 0;font-weight:500;color:#6b7280;font-size:11px;">Alumnos</th>
+              <th style="text-align:center;padding:8px 0;font-weight:500;color:#6b7280;font-size:11px;">Sesiones</th>
+              <th style="text-align:center;padding:8px 0;font-weight:500;color:#6b7280;font-size:11px;">PPM medio</th>
+              <th style="text-align:center;padding:8px 0;font-weight:500;color:#6b7280;font-size:11px;">Objetivo</th>
+              <th style="text-align:center;padding:8px 0;font-weight:500;color:#6b7280;font-size:11px;">Precisión</th>
+              <th style="text-align:center;padding:8px 0;font-weight:500;color:#6b7280;font-size:11px;">Om.</th>
+              <th style="text-align:center;padding:8px 0;font-weight:500;color:#6b7280;font-size:11px;">Sust.</th>
+              <th style="text-align:center;padding:8px 0;font-weight:500;color:#6b7280;font-size:11px;">Rep.</th>
+            </tr></thead>
+            <tbody>
+              ${cursosConDatos.map(curso => {
+                const d = baremosPorCurso[curso];
+                const obj = objetivos[curso];
+                const pct = Math.round((d.ppmMedio / obj) * 100);
+                const color = pct >= 100 ? "#1D9E75" : pct >= 80 ? "#EF9F27" : "#E24B4A";
+                return `<tr style="border-bottom:0.5px solid #f3f4f6;">
+                  <td style="padding:10px 0;font-weight:500;color:#111;">${nombresCurso[curso]}</td>
+                  <td style="text-align:center;padding:10px 0;color:#374151;">${d.numAlumnos}</td>
+                  <td style="text-align:center;padding:10px 0;color:#374151;">${d.numSesiones}</td>
+                  <td style="text-align:center;padding:10px 0;"><span style="font-weight:500;color:${color};">${d.ppmMedio}</span><span style="font-size:10px;color:#9ca3af;margin-left:4px;">${pct}%</span></td>
+                  <td style="text-align:center;padding:10px 0;color:#9ca3af;">${obj}</td>
+                  <td style="text-align:center;padding:10px 0;color:#374151;">${d.precMedio}%</td>
+                  <td style="text-align:center;padding:10px 0;color:#791F1F;">${d.omMedio}</td>
+                  <td style="text-align:center;padding:10px 0;color:#633806;">${d.stMedio}</td>
+                  <td style="text-align:center;padding:10px 0;color:#3C3489;">${d.repMedio}</td>
+                </tr>`;
+              }).join("")}
+            </tbody>
+          </table>`
+      }
+      <div style="font-size:11px;color:#9ca3af;margin-top:0.75rem;">💡 Con más usuarios y sesiones este baremo se convierte en un dato propio de LectorIA — único en el mercado español.</div>
     </div>`;
 }
 </script>
