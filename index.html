@@ -236,6 +236,10 @@ async function iniciar() {
   timer = setInterval(() => {
     segundos = Math.round((Date.now() - inicio) / 1000);
     document.getElementById("tiempo").textContent = segundos + "s";
+    if (segundos >= 300) {
+      document.getElementById("msg").textContent = "⏱ Tiempo máximo alcanzado — analizando...";
+      parar();
+    }
   }, 1000);
 }
 
