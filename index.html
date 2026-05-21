@@ -320,10 +320,71 @@ async function parar() {
   document.getElementById("mascot").textContent = "🔍";
   document.getElementById("msg").textContent = "Analizando tu lectura...";
 
+// Convierte el blob de audio (webm/opus del MediaRecorder) a WAV 16kHz mono,
+// que es el formato que gpt-4o-transcribe acepta sin rechistar.
+async function blobAWav(blob) {
+  const arrayBuffer = await blob.arrayBuffer();
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+
+  // Resamplear a 16kHz mono (estándar para reconocimiento de voz)
+  const targetSampleRate = 16000;
+  const length = Math.floor(audioBuffer.duration * targetSampleRate);
+  const offline = new OfflineAudioContext(1, length, targetSampleRate);
+  const src = offline.createBufferSource();
+  src.buffer = audioBuffer;
+  src.connect(offline.destination);
+  src.start();
+  const rendered = await offline.startRendering();
+
+  // Generar WAV PCM 16-bit
+  const samples = rendered.length;
+  const dataSize = samples * 2;
+  const ab = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(ab);
+  const writeStr = (o, s) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
+
+  writeStr(0, "RIFF");
+  view.setUint32(4, 36 + dataSize, true);
+  writeStr(8, "WAVE");
+  writeStr(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);          // PCM
+  view.setUint16(22, 1, true);          // mono
+  view.setUint32(24, targetSampleRate, true);
+  view.setUint32(28, targetSampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeStr(36, "data");
+  view.setUint32(40, dataSize, true);
+
+  const channelData = rendered.getChannelData(0);
+  let offset = 44;
+  for (let i = 0; i < samples; i++) {
+    const s = Math.max(-1, Math.min(1, channelData[i]));
+    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    offset += 2;
+  }
+  return new Blob([ab], { type: "audio/wav" });
+}
+
   mediaRecorder.onstop = async () => {
-    const blob = new Blob(audioChunks, { type: "audio/webm" });
+    const blobWebm = new Blob(audioChunks, { type: "audio/webm" });
+
+    let blobWav;
+    try {
+      blobWav = await blobAWav(blobWebm);
+    } catch (err) {
+      alert("❌ No pude procesar el audio:\n\n" + err.message);
+      console.error(err);
+      document.getElementById("btn").disabled = false;
+      document.getElementById("btn").textContent = "🎤 Pulsa para leer";
+      document.getElementById("btn").className = "btn idle";
+      return;
+    }
+
     const formData = new FormData();
-    formData.append("file", blob, "lectura.webm");
+    formData.append("file", blobWav, "lectura.wav");
     formData.append("model", "gpt-4o-transcribe");
     formData.append("language", "es");
     formData.append("prompt", textOriginal);
