@@ -563,6 +563,32 @@ async function procesarResultado(transcripcion) {
     }
   }
 
+  // PASADA 2 (refuerzo): si la transcripción tiene dos palabras consecutivas iguales (después de normalizar),
+  // y una de ellas está alineada con una palabra original, marca esa original como repetida.
+  // Esto cubre casos donde la inserción queda lejos del match por el camino que elige NW.
+  for (let k = 1; k < leidas.length; k++) {
+    if (normalizar(leidas[k]) === normalizar(leidas[k-1]) && normalizar(leidas[k]) !== "") {
+      // Encontrar qué palabra original está alineada con leidas[k] o leidas[k-1]
+      for (const a of alignment) {
+        if (a.orig !== null && a.leida !== null &&
+            (normalizar(a.leida) === normalizar(leidas[k]))) {
+          indicesRepetidos.add(a.origIdx);
+        }
+      }
+    }
+  }
+
+  // Debug: mostrar el alineamiento completo
+  const alignDebug = alignment.map((a, idx) => {
+    const tag = a.orig === null ? "+EXTRA" : a.leida === null ? "-OMIT" : (a.sim >= 0.7 ? "=OK" : "≠SUST");
+    const rep = indicesRepetidos.has(a.origIdx) ? " [REP]" : "";
+    return `${String(idx).padStart(3)} ${tag.padEnd(7)} orig="${a.orig || "—"}" leida="${a.leida || "—"}"${rep}`;
+  }).join("\n");
+  console.log("Alineamiento:\n" + alignDebug);
+  console.log("Índices repetidos:", [...indicesRepetidos]);
+  const debugPanel = document.getElementById("transcripcion-cruda");
+  debugPanel.textContent = transcripcion + "\n\n--- ALINEAMIENTO ---\n" + alignDebug + "\n\nÍndices repetidos: " + [...indicesRepetidos].join(", ");
+
   const erroresDetalle = [];
   let omisiones = 0, sustituciones = 0, reps = 0;
   let coincidencias = 0;
