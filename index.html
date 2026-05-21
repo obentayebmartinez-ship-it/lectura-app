@@ -391,10 +391,10 @@ async function blobAWav(blob) {
     formData.append("file", blobWav, "lectura.wav");
     formData.append("model", "whisper-1");
     formData.append("language", "es");
-    // Sin prompt: cualquier pista de contexto sesga la transcripción hacia el texto "limpio".
-    // Temperatura > 0: con temp=0 Whisper va al texto más probable (= versión idealizada).
-    // Con algo de temperatura respeta más lo que realmente oye, incluyendo repeticiones.
-    formData.append("temperature", "0.4");
+    // Prompt "anti-corrección": le decimos a Whisper que el audio NO es una lectura perfecta
+    // y debe transcribir literal, sin reconstruir lo que cree que "debería" decir.
+    formData.append("prompt", "Audio de un alumno leyendo. Puede repetir palabras, equivocarse, dudar o decir palabras de más. Transcribe exactamente lo que se oye, sin corregir ni completar.");
+    formData.append("temperature", "0.6");
     formData.append("response_format", "json");
 
     // ✅ Llama al proxy serverless — la API key nunca sale del servidor
