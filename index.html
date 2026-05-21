@@ -538,19 +538,27 @@ async function procesarResultado(transcripcion) {
   const alignment = alinearSecuencias(palabras, leidas);
 
   // PASADA 1: identificar repeticiones a partir de inserciones del alineamiento.
-  // Una palabra "extra dicha" que coincide con la palabra anterior alineada = repetición.
+  // Una palabra "extra dicha" es repetición si coincide con la palabra alineada anterior
+  // O con la siguiente (Needleman-Wunsch puede colocar la inserción a un lado u otro).
   const indicesRepetidos = new Set();
   for (let i = 0; i < alignment.length; i++) {
     const a = alignment[i];
     if (a.orig === null && a.leida !== null) {
-      // Buscar la última palabra alineada antes de esta inserción
+      // Buscar la palabra alineada inmediatamente anterior
+      let prev = null;
       for (let j = i - 1; j >= 0; j--) {
-        if (alignment[j].orig !== null && alignment[j].leida !== null) {
-          if (normalizar(a.leida) === normalizar(alignment[j].leida)) {
-            indicesRepetidos.add(alignment[j].origIdx);
-          }
-          break;
-        }
+        if (alignment[j].orig !== null && alignment[j].leida !== null) { prev = alignment[j]; break; }
+      }
+      // Buscar la palabra alineada inmediatamente posterior
+      let next = null;
+      for (let j = i + 1; j < alignment.length; j++) {
+        if (alignment[j].orig !== null && alignment[j].leida !== null) { next = alignment[j]; break; }
+      }
+      const ins = normalizar(a.leida);
+      if (prev && ins === normalizar(prev.leida)) {
+        indicesRepetidos.add(prev.origIdx);
+      } else if (next && ins === normalizar(next.leida)) {
+        indicesRepetidos.add(next.origIdx);
       }
     }
   }
