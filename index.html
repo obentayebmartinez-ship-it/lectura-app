@@ -387,9 +387,9 @@ async function blobAWav(blob) {
     formData.append("file", blobWav, "lectura.wav");
     formData.append("model", "whisper-1");
     formData.append("language", "es");
-    // ⚠️ NO pasamos el texto original como prompt. Si lo hacemos, Whisper "rellena"
-    // o "corrige" lo que el niño dice para que cuadre con el texto → errores no detectados.
-    // Queremos transcripción 100% literal de lo que se oye.
+    // Prompt técnico: NO le decimos qué palabras esperar (eso causaría auto-corrección),
+    // solo le pedimos a Whisper que transcriba literal incluso las repeticiones.
+    formData.append("prompt", "Transcribe literalmente, palabra por palabra, incluyendo repeticiones y tartamudeos.");
     formData.append("temperature", "0");
     formData.append("response_format", "json");
 
@@ -512,6 +512,7 @@ function alinearSecuencias(originales, leidas) {
 }
 
 function detectarRepeticiones(leidas) {
+  // Mantenido por compatibilidad (algunas repeticiones consecutivas que Whisper sí preserva)
   const repetidas = new Set();
   for (let i = 1; i < leidas.length; i++) {
     if (normalizar(leidas[i]) === normalizar(leidas[i-1])) repetidas.add(normalizar(leidas[i]));
@@ -522,37 +523,54 @@ function detectarRepeticiones(leidas) {
 async function procesarResultado(transcripcion) {
   const leidasRaw = transcripcion.split(/\s+/).filter(w => w.length > 0);
   const leidas = expandirContracciones(leidasRaw);
-  const repetidas = detectarRepeticiones(leidas);
 
   // Alineación óptima usando Needleman-Wunsch
   const alignment = alinearSecuencias(palabras, leidas);
+
+  // PASADA 1: identificar repeticiones a partir de inserciones del alineamiento.
+  // Una palabra "extra dicha" que coincide con la palabra anterior alineada = repetición.
+  const indicesRepetidos = new Set();
+  for (let i = 0; i < alignment.length; i++) {
+    const a = alignment[i];
+    if (a.orig === null && a.leida !== null) {
+      // Buscar la última palabra alineada antes de esta inserción
+      for (let j = i - 1; j >= 0; j--) {
+        if (alignment[j].orig !== null && alignment[j].leida !== null) {
+          if (normalizar(a.leida) === normalizar(alignment[j].leida)) {
+            indicesRepetidos.add(alignment[j].origIdx);
+          }
+          break;
+        }
+      }
+    }
+  }
 
   const erroresDetalle = [];
   let omisiones = 0, sustituciones = 0, reps = 0;
   let coincidencias = 0;
 
   for (const a of alignment) {
-    if (a.orig === null) continue; // palabra extra dicha (inserción) — no marca ninguna palabra del texto
+    if (a.orig === null) continue; // inserción que no es repetición → palabra extra, no la marcamos
     const span = document.getElementById("w" + a.origIdx);
     if (!span) continue;
 
     if (a.leida === null) {
-      // No se encontró correspondencia → omisión real
+      // Sin correspondencia → omisión
       span.className = "word omision";
       erroresDetalle.push({ tipo: "omision", original: a.orig, leida: "—" });
       omisiones++;
+    } else if (indicesRepetidos.has(a.origIdx)) {
+      // Palabra repetida (el niño la dijo dos veces correctamente)
+      span.className = "word repeticion";
+      erroresDetalle.push({ tipo: "repeticion", original: a.orig, leida: a.leida + " (×2)" });
+      reps++;
+      coincidencias++; // contar como acertada para la precisión global
     } else if (a.sim >= 0.7) {
-      // Coincidencia aceptable
-      if (repetidas.has(normalizar(a.leida))) {
-        span.className = "word repeticion";
-        erroresDetalle.push({ tipo: "repeticion", original: a.orig, leida: a.leida });
-        reps++;
-      } else {
-        span.className = "word done";
-        coincidencias++;
-      }
+      // Coincidencia normal
+      span.className = "word done";
+      coincidencias++;
     } else {
-      // Alineado pero muy diferente → sustitución
+      // Sustitución
       span.className = "word sustitucion";
       erroresDetalle.push({ tipo: "sustitucion", original: a.orig, leida: a.leida });
       sustituciones++;
