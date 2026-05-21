@@ -123,6 +123,10 @@
       <div class="error-titulo">Detalle de errores</div>
       <div id="lista-errores"></div>
     </div>
+    <details style="margin-top:0.75rem;background:#fff;border:0.5px solid #e5e7eb;border-radius:10px;padding:0.75rem;">
+      <summary style="font-size:12px;font-weight:500;color:#374151;cursor:pointer;">🔍 Ver transcripción cruda (debug)</summary>
+      <div id="transcripcion-cruda" style="font-size:12px;color:#6b7280;margin-top:0.5rem;font-family:monospace;white-space:pre-wrap;"></div>
+    </details>
     <div class="guardado" id="guardado">✓ Sesión guardada</div>
   </div>
 </div>
@@ -523,6 +527,12 @@ function detectarRepeticiones(leidas) {
 async function procesarResultado(transcripcion) {
   const leidasRaw = transcripcion.split(/\s+/).filter(w => w.length > 0);
   const leidas = expandirContracciones(leidasRaw);
+
+  // Debug visible: lo que Whisper realmente oyó
+  document.getElementById("transcripcion-cruda").textContent = transcripcion;
+  console.log("Transcripción cruda:", transcripcion);
+  console.log("Palabras leídas (tras expandir contracciones):", leidas);
+  console.log("Palabras del texto original:", palabras.map(p => p));
 
   // Alineación óptima usando Needleman-Wunsch
   const alignment = alinearSecuencias(palabras, leidas);
