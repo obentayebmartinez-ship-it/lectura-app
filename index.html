@@ -324,12 +324,11 @@ async function parar() {
     const blob = new Blob(audioChunks, { type: "audio/webm" });
     const formData = new FormData();
     formData.append("file", blob, "lectura.webm");
-    formData.append("model", "whisper-1");
+    formData.append("model", "gpt-4o-transcribe");
     formData.append("language", "es");
     formData.append("prompt", textOriginal);
     formData.append("temperature", "0");
-    formData.append("response_format", "verbose_json");
-    formData.append("timestamp_granularities[]", "word");
+    formData.append("response_format", "json");
 
     // ✅ Llama al proxy serverless — la API key nunca sale del servidor
     const res = await fetch("/api/transcribe", {
@@ -337,7 +336,7 @@ async function parar() {
       body: formData
     });
     const data = await res.json();
-    procesarResultado(data.text || "", data.words || [], data.segments || []);
+    procesarResultado(data.text || "");
   };
 }
 
@@ -356,19 +355,76 @@ function normalizar(str) {
   return str.toLowerCase().replace(/[.,;:!?¡¿\-]/g, "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 }
 
+// Whisper a veces transcribe "del"="de el" o "al"="a el". Expandimos para alinear bien.
+function expandirContracciones(palabras) {
+  const out = [];
+  for (const w of palabras) {
+    const n = normalizar(w);
+    if (n === "del") { out.push("de"); out.push("el"); }
+    else if (n === "al") { out.push("a"); out.push("el"); }
+    else out.push(w);
+  }
+  return out;
+}
+
 const PALABRAS_FUNCIONALES = new Set(["el","la","los","las","un","una","unos","unas","de","del","al","en","y","a","que","se","su","con","por","para","es","son","lo","le","me","te","nos"]);
 
 function similitud(orig, leida) {
   const a = normalizar(orig), b = normalizar(leida);
   if (a === b) return 1;
-  if (PALABRAS_FUNCIONALES.has(a) && PALABRAS_FUNCIONALES.has(b)) return 0.9;
-  if (a.includes(b) || b.includes(a)) return 0.82;
+  if (!a || !b) return 0;
+  if (PALABRAS_FUNCIONALES.has(a) && PALABRAS_FUNCIONALES.has(b)) return 0.85;
+  if (a.includes(b) || b.includes(a)) return 0.85;
   const maxLen = Math.max(a.length, b.length);
   if (maxLen === 0) return 1;
   const dist = levenshtein(a, b);
-  if (maxLen <= 3) return dist === 0 ? 1 : dist === 1 ? 0.6 : 0;
-  if (maxLen <= 6) return 1 - (dist / maxLen) > 0.6 ? 1 - (dist / maxLen) : 0;
-  return 1 - (dist / maxLen);
+  // Palabras cortas: más tolerancia, una sola letra de diferencia ya es bastante
+  if (maxLen <= 3) return dist === 0 ? 1 : dist === 1 ? 0.7 : 0.2;
+  if (maxLen <= 5) return dist === 0 ? 1 : dist === 1 ? 0.8 : dist === 2 ? 0.5 : 0.2;
+  return Math.max(0, 1 - (dist / maxLen));
+}
+
+// Needleman-Wunsch: alineación óptima de secuencias.
+// Devuelve un array donde cada elemento es { orig, origIdx, leida, sim }.
+// Si orig=null → palabra extra dicha (inserción). Si leida=null → omisión.
+function alinearSecuencias(originales, leidas) {
+  const m = originales.length, n = leidas.length;
+  const GAP = -0.6; // penalización por hueco
+  const dp = Array.from({length: m+1}, () => new Float32Array(n+1));
+  const tb = Array.from({length: m+1}, () => new Int8Array(n+1));
+
+  for (let i = 1; i <= m; i++) { dp[i][0] = i * GAP; tb[i][0] = 1; }
+  for (let j = 1; j <= n; j++) { dp[0][j] = j * GAP; tb[0][j] = 2; }
+
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      const sim = similitud(originales[i-1], leidas[j-1]);
+      const matchScore = sim * 2 - 1; // similitud 0..1 → puntuación -1..1
+      const diag = dp[i-1][j-1] + matchScore;
+      const up = dp[i-1][j] + GAP;
+      const left = dp[i][j-1] + GAP;
+      if (diag >= up && diag >= left) { dp[i][j] = diag; tb[i][j] = 0; }
+      else if (up >= left) { dp[i][j] = up; tb[i][j] = 1; }
+      else { dp[i][j] = left; tb[i][j] = 2; }
+    }
+  }
+
+  // Reconstruir el alineamiento
+  const alignment = [];
+  let i = m, j = n;
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && tb[i][j] === 0) {
+      alignment.unshift({ orig: originales[i-1], origIdx: i-1, leida: leidas[j-1], sim: similitud(originales[i-1], leidas[j-1]) });
+      i--; j--;
+    } else if (i > 0 && (j === 0 || tb[i][j] === 1)) {
+      alignment.unshift({ orig: originales[i-1], origIdx: i-1, leida: null, sim: 0 });
+      i--;
+    } else {
+      alignment.unshift({ orig: null, origIdx: -1, leida: leidas[j-1], sim: 0 });
+      j--;
+    }
+  }
+  return alignment;
 }
 
 function detectarRepeticiones(leidas) {
@@ -379,60 +435,47 @@ function detectarRepeticiones(leidas) {
   return repetidas;
 }
 
-function detectarVacilaciones(words) {
-  const vacilaciones = new Set();
-  if (!words || words.length === 0) return vacilaciones;
-  for (let i = 1; i < words.length; i++) {
-    if (words[i].start - words[i-1].end > 1.2) vacilaciones.add(normalizar(words[i].word));
-  }
-  return vacilaciones;
-}
-
-async function procesarResultado(transcripcion, words = [], segmentos = []) {
-  const leidas = transcripcion.split(/\s+/).filter(w => w.length > 0);
+async function procesarResultado(transcripcion) {
+  const leidasRaw = transcripcion.split(/\s+/).filter(w => w.length > 0);
+  const leidas = expandirContracciones(leidasRaw);
   const repetidas = detectarRepeticiones(leidas);
-  const vacilaciones = detectarVacilaciones(words);
+
+  // Alineación óptima usando Needleman-Wunsch
+  const alignment = alinearSecuencias(palabras, leidas);
+
   const erroresDetalle = [];
-  let omisiones = 0, sustituciones = 0, reps = 0, vacs = 0;
-  let totalErrores = 0, coincidencias = 0;
-  let idxLeida = 0;
+  let omisiones = 0, sustituciones = 0, reps = 0;
+  let coincidencias = 0;
 
-  palabras.forEach((p, i) => {
-    const orig = normalizar(p);
-    const span = document.getElementById("w" + i);
-    let mejorScore = 0, mejorIdx = idxLeida, mejorPalabra = "";
-    for (let j = idxLeida; j < Math.min(idxLeida + 8, leidas.length); j++) {
-      const score = similitud(p, leidas[j]);
-      if (score > mejorScore) { mejorScore = score; mejorIdx = j; mejorPalabra = leidas[j]; }
-    }
-    const esRepeticion = repetidas.has(normalizar(mejorPalabra));
-    const esVacilacion = vacilaciones.has(orig);
+  for (const a of alignment) {
+    if (a.orig === null) continue; // palabra extra dicha (inserción) — no marca ninguna palabra del texto
+    const span = document.getElementById("w" + a.origIdx);
+    if (!span) continue;
 
-    if (mejorScore >= 0.75) {
-      if (esRepeticion) {
+    if (a.leida === null) {
+      // No se encontró correspondencia → omisión real
+      span.className = "word omision";
+      erroresDetalle.push({ tipo: "omision", original: a.orig, leida: "—" });
+      omisiones++;
+    } else if (a.sim >= 0.7) {
+      // Coincidencia aceptable
+      if (repetidas.has(normalizar(a.leida))) {
         span.className = "word repeticion";
-        erroresDetalle.push({ tipo: "repeticion", original: p, leida: mejorPalabra });
-        reps++; totalErrores++;
-      } else if (esVacilacion) {
-        span.className = "word sustitucion";
-        erroresDetalle.push({ tipo: "vacilacion", original: p, leida: mejorPalabra });
-        vacs++; totalErrores++;
+        erroresDetalle.push({ tipo: "repeticion", original: a.orig, leida: a.leida });
+        reps++;
       } else {
         span.className = "word done";
         coincidencias++;
       }
-      idxLeida = mejorIdx + 1;
-    } else if (mejorScore >= 0.45) {
-      span.className = "word sustitucion";
-      erroresDetalle.push({ tipo: "sustitucion", original: p, leida: mejorPalabra || "?" });
-      sustituciones++; totalErrores++;
-      idxLeida = mejorIdx + 1;
     } else {
-      span.className = "word omision";
-      erroresDetalle.push({ tipo: "omision", original: p, leida: "—" });
-      omisiones++; totalErrores++;
+      // Alineado pero muy diferente → sustitución
+      span.className = "word sustitucion";
+      erroresDetalle.push({ tipo: "sustitucion", original: a.orig, leida: a.leida });
+      sustituciones++;
     }
-  });
+  }
+
+  const totalErrores = omisiones + sustituciones + reps;
 
   document.getElementById("prog").style.width = "100%";
   document.getElementById("prog-label").textContent = palabras.length + " de " + palabras.length + " palabras";
@@ -446,7 +489,7 @@ async function procesarResultado(transcripcion, words = [], segmentos = []) {
   document.getElementById("r-omisiones").textContent = omisiones;
   document.getElementById("r-sustituciones").textContent = sustituciones;
   document.getElementById("r-repeticiones").textContent = reps;
-  document.getElementById("r-vacilaciones").textContent = vacs;
+  document.getElementById("r-vacilaciones").textContent = 0;
 
   const alumno = document.getElementById("alumno").value.trim();
   document.getElementById("result-title").textContent = "¡Muy bien, " + alumno.split(" ")[0] + "!";
@@ -457,7 +500,7 @@ async function procesarResultado(transcripcion, words = [], segmentos = []) {
       <div class="error-row">
         <span>"${e.original}"</span>
         <span style="color:#9ca3af">→ "${e.leida}"</span>
-        <span class="tag tag-${e.tipo === 'vacilacion' ? 'sustitucion' : e.tipo}">${e.tipo}</span>
+        <span class="tag tag-${e.tipo}">${e.tipo}</span>
       </div>`).join("");
     document.getElementById("detalle-errores").style.display = "block";
   }
@@ -473,7 +516,7 @@ async function procesarResultado(transcripcion, words = [], segmentos = []) {
 
   const { error } = await sb.from("sesiones").insert({
     alumno, fecha: new Date().toISOString(), ppm: ppmFinal, precision: precFinal,
-    omisiones, sustituciones, repeticiones: reps, vacilaciones: vacs, texto_id: lecturaActual.id
+    omisiones, sustituciones, repeticiones: reps, vacilaciones: 0, texto_id: lecturaActual.id
   });
   if (!error) document.getElementById("guardado").classList.add("show");
 }
