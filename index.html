@@ -13,9 +13,6 @@
     .brand { font-size: 15px; font-weight: 500; color: #111; display: flex; align-items: center; gap: 8px; }
     .brand-dot { width: 8px; height: 8px; border-radius: 50%; background: #1D9E75; }
     .back-btn { font-size: 12px; color: #6b7280; border: 0.5px solid #d1d5db; border-radius: 8px; padding: 5px 12px; background: transparent; cursor: pointer; }
-    .api-box { background: #fefce8; border: 0.5px solid #fde047; border-radius: 12px; padding: 0.875rem 1rem; margin-bottom: 1rem; }
-    .api-box label { font-size: 11px; color: #854d0e; font-weight: 500; display: block; margin-bottom: 4px; }
-    .api-box input { width: 100%; padding: 7px 10px; border-radius: 8px; border: 0.5px solid #e5e7eb; font-size: 13px; background: #fff; color: #111; outline: none; }
     .alumno-card { display: flex; align-items: center; gap: 12px; background: #f5f5f0; border-radius: 12px; padding: 0.875rem 1rem; margin-bottom: 1.25rem; }
     .avatar { width: 40px; height: 40px; border-radius: 50%; background: #E1F5EE; display: flex; align-items: center; justify-content: center; font-weight: 500; font-size: 13px; color: #0F6E56; flex-shrink: 0; }
     .alumno-info { flex: 1; }
@@ -78,10 +75,7 @@
     <div class="brand"><div class="brand-dot"></div>LectorIA</div>
     <button class="back-btn" onclick="window.location.href='panel.html'">← Panel</button>
   </div>
-  <div class="api-box">
-    <label>API key de OpenAI</label>
-    <input type="password" id="apikey" placeholder="sk-..." />
-  </div>
+  <!-- ✅ Campo de API key eliminado — ahora va en el servidor -->
   <div class="alumno-card">
     <div class="avatar" id="avatar">?</div>
     <div class="alumno-info">
@@ -245,7 +239,6 @@ const lecturas = {
 
 const alumnoGuardado = localStorage.getItem("alumno_nombre") || "";
 const cursoAlumno = localStorage.getItem("alumno_curso") || "2P";
-const keyGuardada = localStorage.getItem("openai_key");
 
 if (alumnoGuardado) {
   document.getElementById("alumno").value = alumnoGuardado;
@@ -253,7 +246,6 @@ if (alumnoGuardado) {
   const iniciales = alumnoGuardado.split(" ").map(n => n[0]).filter(Boolean).join("").substring(0,2).toUpperCase();
   document.getElementById("avatar").textContent = iniciales;
 }
-if (keyGuardada) document.getElementById("apikey").value = keyGuardada;
 
 document.getElementById("alumno").addEventListener("input", function() {
   const val = this.value.trim();
@@ -294,9 +286,6 @@ function toggleLectura() {
 }
 
 async function iniciar() {
-  const apikey = document.getElementById("apikey").value.trim();
-  if (!apikey) { alert("Introduce tu API key de OpenAI primero"); return; }
-  localStorage.setItem("openai_key", apikey);
   const alumno = document.getElementById("alumno").value.trim();
   if (!alumno) { alert("Introduce el nombre del alumno primero"); return; }
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -341,10 +330,10 @@ async function parar() {
     formData.append("temperature", "0");
     formData.append("response_format", "verbose_json");
     formData.append("timestamp_granularities[]", "word");
-    const apikey = document.getElementById("apikey").value.trim();
-    const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+
+    // ✅ Llama al proxy serverless — la API key nunca sale del servidor
+    const res = await fetch("/api/transcribe", {
       method: "POST",
-      headers: { "Authorization": "Bearer " + apikey },
       body: formData
     });
     const data = await res.json();
