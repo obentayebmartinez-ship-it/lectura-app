@@ -387,7 +387,9 @@ async function blobAWav(blob) {
     formData.append("file", blobWav, "lectura.wav");
     formData.append("model", "whisper-1");
     formData.append("language", "es");
-    formData.append("prompt", textOriginal);
+    // ⚠️ NO pasamos el texto original como prompt. Si lo hacemos, Whisper "rellena"
+    // o "corrige" lo que el niño dice para que cuadre con el texto → errores no detectados.
+    // Queremos transcripción 100% literal de lo que se oye.
     formData.append("temperature", "0");
     formData.append("response_format", "json");
 
