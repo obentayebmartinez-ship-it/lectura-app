@@ -331,12 +331,33 @@ async function parar() {
     formData.append("response_format", "json");
 
     // ✅ Llama al proxy serverless — la API key nunca sale del servidor
-    const res = await fetch("/api/transcribe", {
-      method: "POST",
-      body: formData
-    });
-    const data = await res.json();
-    procesarResultado(data.text || "");
+    try {
+      const res = await fetch("/api/transcribe", {
+        method: "POST",
+        body: formData
+      });
+      const data = await res.json();
+      console.log("Respuesta de /api/transcribe:", res.status, data);
+
+      if (!res.ok) {
+        alert("❌ Error " + res.status + ":\n\n" + JSON.stringify(data, null, 2));
+        document.getElementById("btn").disabled = false;
+        document.getElementById("btn").textContent = "🎤 Pulsa para leer";
+        document.getElementById("btn").className = "btn idle";
+        return;
+      }
+      if (!data.text || data.text.trim() === "") {
+        alert("⚠️ La transcripción vino vacía. Respuesta cruda:\n\n" + JSON.stringify(data, null, 2));
+        document.getElementById("btn").disabled = false;
+        document.getElementById("btn").textContent = "🎤 Pulsa para leer";
+        document.getElementById("btn").className = "btn idle";
+        return;
+      }
+      procesarResultado(data.text);
+    } catch (err) {
+      alert("❌ Error de red:\n\n" + err.message);
+      console.error(err);
+    }
   };
 }
 
