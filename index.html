@@ -385,7 +385,7 @@ async function blobAWav(blob) {
 
     const formData = new FormData();
     formData.append("file", blobWav, "lectura.wav");
-    formData.append("model", "gpt-4o-transcribe");
+    formData.append("model", "whisper-1");
     formData.append("language", "es");
     formData.append("prompt", textOriginal);
     formData.append("temperature", "0");
