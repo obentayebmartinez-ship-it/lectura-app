@@ -381,18 +381,25 @@ async function iniciar() {
 
     // Resultado por utterance
     recognizer.recognized = (s, e) => {
+      console.log('🔵 recognized reason:', e.result.reason, '| texto:', e.result.text);
       if (e.result.reason === SpeechSDK.ResultReason.RecognizedSpeech) {
         const pr    = SpeechSDK.PronunciationAssessmentResult.fromResult(e.result);
+        console.log('📊 detailResult:', JSON.stringify(pr.detailResult));
+        console.log('🎯 accuracy:', pr.accuracyScore, 'fluency:', pr.fluencyScore);
         const words = pr.detailResult?.Words;
+        console.log('📖 words:', words);
         if (words && words.length > 0) {
-          // Fluency acumulada
           if (pr.fluencyScore) {
             fluencyTotal += pr.fluencyScore;
             fluencyCount++;
           }
           words.forEach(w => allWords.push(w));
           colorearPalabras(words);
+        } else {
+          console.warn('⚠️ words vacias o null - detailResult completo:', pr.detailResult);
         }
+      } else {
+        console.warn('⚠️ reason no es RecognizedSpeech:', e.result.reason);
       }
     };
 
