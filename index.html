@@ -381,25 +381,25 @@ async function iniciar() {
 
     // Resultado por utterance
     recognizer.recognized = (s, e) => {
-      console.log('🔵 recognized reason:', e.result.reason, '| texto:', e.result.text);
-      if (e.result.reason === SpeechSDK.ResultReason.RecognizedSpeech) {
-        const pr    = SpeechSDK.PronunciationAssessmentResult.fromResult(e.result);
-        console.log('📊 detailResult:', JSON.stringify(pr.detailResult));
-        console.log('🎯 accuracy:', pr.accuracyScore, 'fluency:', pr.fluencyScore);
-        const words = pr.detailResult?.Words;
-        console.log('📖 words:', words);
-        if (words && words.length > 0) {
-          if (pr.fluencyScore) {
-            fluencyTotal += pr.fluencyScore;
-            fluencyCount++;
-          }
-          words.forEach(w => allWords.push(w));
-          alinearConReferencia(words);
-        } else {
-          console.warn('⚠️ words vacias o null - detailResult completo:', pr.detailResult);
-        }
-      } else {
-        console.warn('⚠️ reason no es RecognizedSpeech:', e.result.reason);
+      if (e.result.reason !== SpeechSDK.ResultReason.RecognizedSpeech) return;
+
+      const pr         = SpeechSDK.PronunciationAssessmentResult.fromResult(e.result);
+      const azureWords = pr.detailResult?.Words || [];
+
+      // Acumular fluency
+      if (pr.fluencyScore) { fluencyTotal += pr.fluencyScore; fluencyCount++; }
+
+      // Guardar words de Azure para vacilaciones
+      azureWords.forEach(w => allWords.push(w));
+
+      // Alinear Lexical transcrito contra texto de referencia restante
+      const lexical     = pr.detailResult?.Lexical || e.result.text || "";
+      const spokenWords = lexical.split(/\s+/).filter(w => w.length > 0);
+      const refSlice    = palabras.slice(refWordIdx);
+
+      if (spokenWords.length > 0 && refSlice.length > 0) {
+        const alignment = alinearNW(refSlice, spokenWords);
+        procesarAlineamiento(alignment, azureWords);
       }
     };
 
@@ -422,7 +422,7 @@ async function iniciar() {
   }
 }
 
-// ─── Helpers de normalización y distancia ────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 function normalizar(str) {
   return (str || "").toLowerCase()
     .replace(/[.,;:!?¡¿\-]/g, "")
@@ -432,100 +432,108 @@ function normalizar(str) {
 
 function levenshtein(a, b) {
   const m = a.length, n = b.length;
-  const dp = Array.from({length: m+1}, (_, i) =>
-    Array.from({length: n+1}, (_, j) => i===0 ? j : j===0 ? i : 0));
-  for (let i = 1; i <= m; i++)
-    for (let j = 1; j <= n; j++)
-      dp[i][j] = a[i-1]===b[j-1] ? dp[i-1][j-1] : 1+Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+  const dp = Array.from({length:m+1}, (_,i) =>
+    Array.from({length:n+1}, (_,j) => i===0?j:j===0?i:0));
+  for (let i=1;i<=m;i++)
+    for (let j=1;j<=n;j++)
+      dp[i][j] = a[i-1]===b[j-1] ? dp[i-1][j-1] : 1+Math.min(dp[i-1][j],dp[i][j-1],dp[i-1][j-1]);
   return dp[m][n];
 }
 
-function sonSimilares(a, b) {
-  if (a === b) return true;
-  if (!a || !b) return false;
+function similitud(a, b) {
+  if (a===b) return 1;
+  if (!a||!b) return 0;
   const maxLen = Math.max(a.length, b.length);
-  if (maxLen === 0) return true;
+  if (maxLen===0) return 1;
   const dist = levenshtein(a, b);
-  if (maxLen <= 3) return dist <= 1;
-  if (maxLen <= 6) return dist <= 2;
-  return dist <= Math.floor(maxLen * 0.3);
+  if (maxLen<=3) return dist===0?1:dist===1?0.7:0.2;
+  if (maxLen<=5) return dist===0?1:dist===1?0.8:dist===2?0.5:0.2;
+  return Math.max(0, 1 - dist/maxLen);
 }
 
-// ─── Alinear palabras dichas con texto de referencia ────────────────────────
-// Azure con reconocimiento continuo NO incluye omisiones en Words[].
-// Usamos los AccuracyScore de Azure por palabra pero hacemos nuestra propia
-// alineación para detectar omisiones.
-function alinearConReferencia(azureWords) {
-  // Filtrar inserciones de Azure
-  const spoken = azureWords.filter(w => w.PronunciationAssessment?.ErrorType !== "Insertion");
-
-  // Detectar repeticiones (inserciones = palabra que ya estaba justo antes)
-  const repeticionesIdx = new Set();
-  azureWords.forEach((w, i) => {
-    if (w.PronunciationAssessment?.ErrorType !== "Insertion") return;
-    const prev = azureWords[i-1];
-    if (prev && normalizar(prev.Word||"") === normalizar(w.Word||"")) {
-      // La palabra anterior era una repetición
-      const span = document.getElementById("w" + (refWordIdx - 1));
-      if (span && span.className === "word done") span.className = "word repeticion";
+// ─── Needleman-Wunsch sobre el Lexical de Azure ──────────────────────────────
+// Azure continuo NO incluye omisiones en Words[]. Solución: alineamos el texto
+// transcrito (Lexical) contra el texto de referencia con NW, y usamos los
+// AccuracyScore de Azure por palabra para detectar mispronunciaciones.
+function alinearNW(origWords, spokenWords) {
+  const m = origWords.length, n = spokenWords.length;
+  const GAP = -0.55;
+  const dp = Array.from({length:m+1}, () => new Float32Array(n+1));
+  const tb = Array.from({length:m+1}, () => new Int8Array(n+1));
+  for (let i=1;i<=m;i++){dp[i][0]=i*GAP;tb[i][0]=1;}
+  for (let j=1;j<=n;j++){dp[0][j]=j*GAP;tb[0][j]=2;}
+  for (let i=1;i<=m;i++){
+    for (let j=1;j<=n;j++){
+      const sim = similitud(normalizar(origWords[i-1]), normalizar(spokenWords[j-1]));
+      const ms  = sim*2-1;
+      const d=dp[i-1][j-1]+ms, u=dp[i-1][j]+GAP, l=dp[i][j-1]+GAP;
+      if (d>=u&&d>=l){dp[i][j]=d;tb[i][j]=0;}
+      else if (u>=l){dp[i][j]=u;tb[i][j]=1;}
+      else{dp[i][j]=l;tb[i][j]=2;}
     }
+  }
+  const al=[];let i=m,j=n;
+  while(i>0||j>0){
+    if(i>0&&j>0&&tb[i][j]===0){al.unshift({orig:origWords[i-1],origIdx:i-1,spoken:spokenWords[j-1]});i--;j--;}
+    else if(i>0&&(j===0||tb[i][j]===1)){al.unshift({orig:origWords[i-1],origIdx:i-1,spoken:null});i--;}
+    else{al.unshift({orig:null,origIdx:-1,spoken:spokenWords[j-1]});j--;}
+  }
+  return al;
+}
+
+function procesarAlineamiento(alignment, azureWords) {
+  // Mapa normalizado → AccuracyScore de Azure
+  const azureAcc = {};
+  (azureWords||[]).forEach(w => {
+    azureAcc[normalizar(w.Word||"")] = w.PronunciationAssessment?.AccuracyScore ?? 100;
   });
 
-  let si = 0; // índice en spoken
+  let erroresAcum = parseInt(document.getElementById("errores").textContent) || 0;
+  let insertionPrev = null;
 
-  while (si < spoken.length && refWordIdx < palabras.length) {
-    const refNorm    = normalizar(palabras[refWordIdx]);
-    const spokenNorm = normalizar(spoken[si].Word || "");
-    const accuracy   = spoken[si].PronunciationAssessment?.AccuracyScore ?? 100;
-
-    if (sonSimilares(refNorm, spokenNorm)) {
-      // ✅ Coincide — marcar como leída (o sustitución si baja precisión)
-      const span = document.getElementById("w" + refWordIdx);
-      if (span) {
-        span.className = accuracy < 55 ? "word sustitucion" : "word done";
+  alignment.forEach(item => {
+    if (item.orig === null) {
+      // Inserción: posible repetición
+      const spokenN = normalizar(item.spoken||"");
+      if (insertionPrev && normalizar(insertionPrev.spoken||"") === spokenN) {
+        // Repetición de la palabra anterior — colorear el span anterior
+        const span = document.getElementById("w" + (refWordIdx - 1));
+        if (span && span.className === "word done") {
+          span.className = "word repeticion";
+          erroresAcum++;
+        }
       }
-      refWordIdx++;
-      si++;
-    } else {
-      // ¿Es la siguiente palabra de ref la que coincide? → omisión
-      const nextRefNorm = refWordIdx + 1 < palabras.length ? normalizar(palabras[refWordIdx + 1]) : null;
-      const nextNextRefNorm = refWordIdx + 2 < palabras.length ? normalizar(palabras[refWordIdx + 2]) : null;
+      insertionPrev = item;
+      return;
+    }
+    insertionPrev = null;
 
-      if (nextRefNorm && sonSimilares(nextRefNorm, spokenNorm)) {
-        // Omisión de 1 palabra
-        const span = document.getElementById("w" + refWordIdx);
-        if (span) span.className = "word omision";
-        refWordIdx++; // saltar la omitida, NO avanzar si
-      } else if (nextNextRefNorm && sonSimilares(nextNextRefNorm, spokenNorm)) {
-        // Omisión de 2 palabras consecutivas
-        const s1 = document.getElementById("w" + refWordIdx);
-        const s2 = document.getElementById("w" + (refWordIdx+1));
-        if (s1) s1.className = "word omision";
-        if (s2) s2.className = "word omision";
-        refWordIdx += 2;
+    const span = document.getElementById("w" + refWordIdx);
+    if (!span) { refWordIdx++; return; }
+
+    if (item.spoken === null) {
+      // Omisión
+      span.className = "word omision";
+      erroresAcum++;
+    } else {
+      const sim     = similitud(normalizar(item.orig), normalizar(item.spoken));
+      const accuracy = azureAcc[normalizar(item.spoken)] ?? 100;
+      if (sim >= 0.65 && accuracy >= 55) {
+        span.className = "word done";
       } else {
-        // Sustitución / palabra distinta
-        const span = document.getElementById("w" + refWordIdx);
-        if (span) span.className = "word sustitucion";
-        refWordIdx++;
-        si++;
+        span.className = "word sustitucion";
+        erroresAcum++;
       }
     }
-  }
+    refWordIdx++;
+  });
 
-  // Actualizar stats visuales
-  let erroresAcum = 0;
-  for (let i = 0; i < refWordIdx; i++) {
-    const s = document.getElementById("w" + i);
-    if (s && (s.className === "word omision" || s.className === "word sustitucion" || s.className === "word repeticion")) erroresAcum++;
-  }
   const pct = Math.min(100, Math.round((refWordIdx / palabras.length) * 100));
   document.getElementById("prog").style.width       = pct + "%";
   document.getElementById("prog-label").textContent = refWordIdx + " palabras";
   document.getElementById("errores").textContent    = erroresAcum;
-  if (segundos > 5) {
+  if (segundos > 5)
     document.getElementById("ppm").textContent = Math.round((refWordIdx / segundos) * 60);
-  }
 }
 
 // ─── PARAR ───────────────────────────────────────────────────────────────────
