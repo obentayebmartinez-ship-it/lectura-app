@@ -36,8 +36,12 @@ body { font-family: system-ui, sans-serif; background: #f5f5f0; min-height: 100v
 .word.omision { background: #FCEBEB; color: #791F1F; padding: 1px 4px; }
 .word.sustitucion { background: #FAEEDA; color: #633806; padding: 1px 4px; }
 .word.repeticion { background: #EEEDFE; color: #3C3489; padding: 1px 4px; }
+.word.inversion { background: #E0EFFA; color: #0C447C; padding: 1px 4px; }
+.word.silabeo { background: #EAF7E1; color: #2C5016; padding: 1px 4px; text-decoration: underline dotted; }
 .prog-wrap { background: #f3f4f6; border-radius: 6px; height: 6px; margin-bottom: 4px; overflow: hidden; }
 .prog-fill { height: 100%; border-radius: 6px; background: #1D9E75; transition: width 0.3s; }
+.prog-wrap.listening .prog-fill { width: 100% !important; animation: progPulse 1.4s ease-in-out infinite; }
+@keyframes progPulse { 0%,100%{opacity:.25} 50%{opacity:.7} }
 .prog-label { font-size: 11px; color: #9ca3af; text-align: right; margin-bottom: 1rem; }
 .stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 1.25rem; }
 .stat { background: #f9fafb; border-radius: 10px; padding: 10px 8px; text-align: center; }
@@ -53,8 +57,12 @@ body { font-family: system-ui, sans-serif; background: #f5f5f0; min-height: 100v
 .result-header { display: flex; align-items: center; gap: 8px; margin-bottom: 1rem; }
 .result-title { font-size: 14px; font-weight: 500; color: #111; }
 .result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 1rem; }
+.result-grid-4 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 7px; margin-bottom: 1rem; }
+.grupo-titulo { font-size: 11px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.04em; margin: 0.5rem 0 0.5rem; }
 .result-item { background: #fff; border: 0.5px solid #e5e7eb; border-radius: 10px; padding: 10px; text-align: center; }
 .result-n { font-size: 22px; font-weight: 500; color: #111; }
+.result-grid-4 .result-n { font-size: 18px; }
+.result-grid-4 .result-l { font-size: 9px; }
 .result-n.ok { color: #1D9E75; }
 .result-n.warn { color: #BA7517; }
 .result-l { font-size: 10px; color: #9ca3af; margin-top: 2px; }
@@ -66,6 +74,7 @@ body { font-family: system-ui, sans-serif; background: #f5f5f0; min-height: 100v
 .tag-omision { background: #FCEBEB; color: #791F1F; }
 .tag-sustitucion { background: #FAEEDA; color: #633806; }
 .tag-repeticion { background: #EEEDFE; color: #3C3489; }
+.tag-inversion { background: #E0EFFA; color: #0C447C; }
 .accuracy-bar { margin-top: 0.75rem; background: #fff; border: 0.5px solid #e5e7eb; border-radius: 10px; padding: 0.75rem; }
 .accuracy-label { font-size: 11px; color: #6b7280; margin-bottom: 4px; display: flex; justify-content: space-between; }
 .accuracy-track { background: #f3f4f6; border-radius: 4px; height: 8px; overflow: hidden; }
@@ -101,18 +110,20 @@ body { font-family: system-ui, sans-serif; background: #f5f5f0; min-height: 100v
     <div class="leyenda">
       <div class="ley-item"><div class="ley-dot" style="background:#F09595"></div>Omisión</div>
       <div class="ley-item"><div class="ley-dot" style="background:#EF9F27"></div>Sustitución</div>
+      <div class="ley-item"><div class="ley-dot" style="background:#7FB5E6"></div>Inversión</div>
       <div class="ley-item"><div class="ley-dot" style="background:#AFA9EC"></div>Repetición</div>
+      <div class="ley-item"><div class="ley-dot" style="background:#9BC77A"></div>Silabeo</div>
     </div>
     <div class="reading" id="texto"></div>
   </div>
 
-  <div class="prog-wrap"><div class="prog-fill" id="prog" style="width:0%"></div></div>
-  <div class="prog-label" id="prog-label">0 palabras</div>
+  <div class="prog-wrap" id="prog-wrap"><div class="prog-fill" id="prog" style="width:0%"></div></div>
+  <div class="prog-label" id="prog-label">Listo para empezar</div>
 
   <div class="stats">
-    <div class="stat"><div class="stat-n" id="ppm">—</div><div class="stat-l">palabras/min</div></div>
     <div class="stat"><div class="stat-n" id="tiempo">0s</div><div class="stat-l">tiempo</div></div>
-    <div class="stat"><div class="stat-n" id="errores">0</div><div class="stat-l">errores</div></div>
+    <div class="stat"><div class="stat-n" id="ppm">—</div><div class="stat-l">palabras/min</div></div>
+    <div class="stat"><div class="stat-n" id="estado">—</div><div class="stat-l">estado</div></div>
   </div>
 
   <button class="btn idle" id="btn" onclick="toggleLectura()">🎤 Pulsa para leer</button>
@@ -122,18 +133,38 @@ body { font-family: system-ui, sans-serif; background: #f5f5f0; min-height: 100v
       <span style="font-size:18px" id="result-emoji">⭐</span>
       <span class="result-title" id="result-title">¡Muy bien!</span>
     </div>
+
     <div class="result-grid">
       <div class="result-item"><div class="result-n ok" id="r-ppm">—</div><div class="result-l">palabras/min</div></div>
       <div class="result-item"><div class="result-n ok" id="r-prec">—</div><div class="result-l">precisión</div></div>
-      <div class="result-item"><div class="result-n warn" id="r-omisiones">0</div><div class="result-l">omisiones</div></div>
-      <div class="result-item"><div class="result-n warn" id="r-sustituciones">0</div><div class="result-l">sustituciones</div></div>
-      <div class="result-item"><div class="result-n warn" id="r-repeticiones">0</div><div class="result-l">repeticiones</div></div>
-      <div class="result-item"><div class="result-n warn" id="r-vacilaciones">0</div><div class="result-l">vacilaciones</div></div>
     </div>
+
+    <div class="grupo-titulo">Exactitud lectora</div>
+    <div class="result-grid-4">
+      <div class="result-item"><div class="result-n warn" id="r-omisiones">0</div><div class="result-l">omisiones</div></div>
+      <div class="result-item"><div class="result-n warn" id="r-sustituciones">0</div><div class="result-l">sustituc.</div></div>
+      <div class="result-item"><div class="result-n warn" id="r-adiciones">0</div><div class="result-l">adiciones</div></div>
+      <div class="result-item"><div class="result-n warn" id="r-inversiones">0</div><div class="result-l">inversiones</div></div>
+    </div>
+
+    <div class="grupo-titulo">Fluidez lectora</div>
+    <div class="result-grid-4">
+      <div class="result-item"><div class="result-n warn" id="r-repeticiones">0</div><div class="result-l">repetic.</div></div>
+      <div class="result-item"><div class="result-n warn" id="r-rectificaciones">0</div><div class="result-l">rectificac.</div></div>
+      <div class="result-item"><div class="result-n warn" id="r-vacilaciones">0</div><div class="result-l">vacilac.</div></div>
+      <div class="result-item"><div class="result-n warn" id="r-silabeo">0</div><div class="result-l">silabeo</div></div>
+      <div class="result-item"><div class="result-n warn" id="r-pausas">0</div><div class="result-l">pausas</div></div>
+    </div>
+
     <div class="accuracy-bar">
-      <div class="accuracy-label"><span>Fluidez</span><span id="fluency-val">—</span></div>
+      <div class="accuracy-label"><span>Fluidez (Azure)</span><span id="fluency-val">—</span></div>
       <div class="accuracy-track"><div class="accuracy-fill" id="fluency-bar" style="width:0%"></div></div>
     </div>
+    <div class="accuracy-bar">
+      <div class="accuracy-label"><span>Entonación (Azure)</span><span id="prosody-val">—</span></div>
+      <div class="accuracy-track"><div class="accuracy-fill" id="prosody-bar" style="width:0%"></div></div>
+    </div>
+
     <div class="error-list" id="detalle-errores" style="display:none; margin-top:0.75rem;">
       <div class="error-titulo">Detalle de errores</div>
       <div id="lista-errores"></div>
@@ -315,6 +346,8 @@ let refWordIdx    = 0;          // posición en el texto de referencia
 let allWords      = [];         // todos los resultados de palabras acumulados
 let fluencyTotal  = 0;
 let fluencyCount  = 0;
+let prosodyTotal  = 0;
+let prosodyCount  = 0;
 
 // ─── Toggle ──────────────────────────────────────────────────────────────────
 function toggleLectura() {
@@ -329,18 +362,18 @@ async function iniciar() {
   // Reset
   allWords     = [];
   refWordIdx   = 0;
-  fluencyTotal = 0;
-  fluencyCount = 0;
+  fluencyTotal = 0; fluencyCount = 0;
+  prosodyTotal = 0; prosodyCount = 0;
   segundos     = 0;
   palabras.forEach((_, i) => {
     const s = document.getElementById("w" + i);
     if (s) s.className = "word";
   });
-  document.getElementById("prog").style.width       = "0%";
-  document.getElementById("prog-label").textContent = "0 palabras";
-  document.getElementById("errores").textContent    = "0";
+  document.getElementById("prog-wrap").classList.add("listening");
+  document.getElementById("prog-label").textContent = "Escuchando... lee con calma";
   document.getElementById("ppm").textContent        = "—";
   document.getElementById("tiempo").textContent     = "0s";
+  document.getElementById("estado").textContent     = "🎧";
   document.getElementById("result").classList.remove("show");
   document.getElementById("guardado").classList.remove("show");
 
@@ -367,40 +400,29 @@ async function iniciar() {
     const speechConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(AZURE_TOKEN, AZURE_REGION);
     speechConfig.speechRecognitionLanguage = "es-ES";
 
-    // Pronunciation Assessment con el texto de referencia
+    // Pronunciation Assessment — granularidad FONEMA (sílabas) + prosodia
     const pronConfig = new SpeechSDK.PronunciationAssessmentConfig(
       textOriginal,
       SpeechSDK.PronunciationAssessmentGradingSystem.HundredMark,
-      SpeechSDK.PronunciationAssessmentGranularity.Word,
-      true   // enableMiscue: detecta omisiones e inserciones
+      SpeechSDK.PronunciationAssessmentGranularity.Phoneme,
+      true   // enableMiscue
     );
+    try { pronConfig.enableProsodyAssessment(); } catch(e) { console.warn("Prosody no disponible", e); }
 
     const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
     recognizer = new SpeechSDK.SpeechRecognizer(speechConfig, audioConfig);
     pronConfig.applyTo(recognizer);
 
-    // Resultado por utterance
+    // Resultado por utterance — SOLO acumulamos, el análisis se hace al final
     recognizer.recognized = (s, e) => {
       if (e.result.reason !== SpeechSDK.ResultReason.RecognizedSpeech) return;
-
-      const pr         = SpeechSDK.PronunciationAssessmentResult.fromResult(e.result);
-      const azureWords = pr.detailResult?.Words || [];
-
-      // Acumular fluency
+      const pr = SpeechSDK.PronunciationAssessmentResult.fromResult(e.result);
       if (pr.fluencyScore) { fluencyTotal += pr.fluencyScore; fluencyCount++; }
-
-      // Guardar words de Azure para vacilaciones
-      azureWords.forEach(w => allWords.push(w));
-
-      // Alinear Lexical transcrito contra texto de referencia restante
-      const lexical     = pr.detailResult?.Lexical || e.result.text || "";
-      const spokenWords = lexical.split(/\s+/).filter(w => w.length > 0);
-      const refSlice    = palabras.slice(refWordIdx);
-
-      if (spokenWords.length > 0 && refSlice.length > 0) {
-        const alignment = alinearNW(refSlice, spokenWords);
-        procesarAlineamiento(alignment, azureWords);
-      }
+      if (pr.prosodyScore) { prosodyTotal += pr.prosodyScore; prosodyCount++; }
+      const words = pr.detailResult?.Words || [];
+      words.forEach(w => { if (w && w.Word) allWords.push(w); });
+      // Feedback ligero: cuántas palabras llevamos oídas (sin colorear)
+      document.getElementById("estado").textContent = allWords.length + " 👂";
     };
 
     recognizer.canceled = (s, e) => {
@@ -474,66 +496,37 @@ function alinearNW(origWords, spokenWords) {
   }
   const al=[];let i=m,j=n;
   while(i>0||j>0){
-    if(i>0&&j>0&&tb[i][j]===0){al.unshift({orig:origWords[i-1],origIdx:i-1,spoken:spokenWords[j-1]});i--;j--;}
-    else if(i>0&&(j===0||tb[i][j]===1)){al.unshift({orig:origWords[i-1],origIdx:i-1,spoken:null});i--;}
-    else{al.unshift({orig:null,origIdx:-1,spoken:spokenWords[j-1]});j--;}
+    if(i>0&&j>0&&tb[i][j]===0){al.unshift({orig:origWords[i-1],origIdx:i-1,spoken:spokenWords[j-1],spokenIdx:j-1});i--;j--;}
+    else if(i>0&&(j===0||tb[i][j]===1)){al.unshift({orig:origWords[i-1],origIdx:i-1,spoken:null,spokenIdx:-1});i--;}
+    else{al.unshift({orig:null,origIdx:-1,spoken:spokenWords[j-1],spokenIdx:j-1});j--;}
   }
   return al;
 }
 
-function procesarAlineamiento(alignment, azureWords) {
-  // Mapa normalizado → AccuracyScore de Azure
-  const azureAcc = {};
-  (azureWords||[]).forEach(w => {
-    azureAcc[normalizar(w.Word||"")] = w.PronunciationAssessment?.AccuracyScore ?? 100;
-  });
+// ─── Detección de inversión (anagrama: mismas letras, distinto orden) ─────────
+function esInversion(target, spoken) {
+  const t = normalizar(target), s = normalizar(spoken);
+  if (t === s || t.length !== s.length || t.length < 3) return false;
+  const ord = x => x.split("").sort().join("");
+  return ord(t) === ord(s);
+}
 
-  let erroresAcum = parseInt(document.getElementById("errores").textContent) || 0;
-  let insertionPrev = null;
-
-  alignment.forEach(item => {
-    if (item.orig === null) {
-      // Inserción: posible repetición
-      const spokenN = normalizar(item.spoken||"");
-      if (insertionPrev && normalizar(insertionPrev.spoken||"") === spokenN) {
-        // Repetición de la palabra anterior — colorear el span anterior
-        const span = document.getElementById("w" + (refWordIdx - 1));
-        if (span && span.className === "word done") {
-          span.className = "word repeticion";
-          erroresAcum++;
-        }
-      }
-      insertionPrev = item;
-      return;
+// ─── Detección de silabeo (gaps entre sílabas o palabra muy lenta) ────────────
+function detectarSilabeo(w) {
+  const syl = w.Syllables;
+  if (syl && syl.length >= 2) {
+    let gaps = 0;
+    for (let k = 1; k < syl.length; k++) {
+      const prev = syl[k-1], cur = syl[k];
+      const gap = (cur.Offset||0) - ((prev.Offset||0) + (prev.Duration||0));
+      if (gap > 2000000) gaps++;   // > 0.2s entre sílabas
     }
-    insertionPrev = null;
-
-    const span = document.getElementById("w" + refWordIdx);
-    if (!span) { refWordIdx++; return; }
-
-    if (item.spoken === null) {
-      // Omisión
-      span.className = "word omision";
-      erroresAcum++;
-    } else {
-      const sim     = similitud(normalizar(item.orig), normalizar(item.spoken));
-      const accuracy = azureAcc[normalizar(item.spoken)] ?? 100;
-      if (sim >= 0.65 && accuracy >= 55) {
-        span.className = "word done";
-      } else {
-        span.className = "word sustitucion";
-        erroresAcum++;
-      }
-    }
-    refWordIdx++;
-  });
-
-  const pct = Math.min(100, Math.round((refWordIdx / palabras.length) * 100));
-  document.getElementById("prog").style.width       = pct + "%";
-  document.getElementById("prog-label").textContent = refWordIdx + " palabras";
-  document.getElementById("errores").textContent    = erroresAcum;
-  if (segundos > 5)
-    document.getElementById("ppm").textContent = Math.round((refWordIdx / segundos) * 60);
+    return gaps >= 1;
+  }
+  // Sin datos de sílaba: heurística por duración/carácter
+  const durSeg = (w.Duration||0) / 10000000;
+  const chars  = (w.Word||"").length;
+  return chars >= 4 && (durSeg / chars) > 0.20;
 }
 
 // ─── PARAR ───────────────────────────────────────────────────────────────────
@@ -559,81 +552,155 @@ function parar() {
   }
 }
 
-// ─── RESULTADOS FINALES ───────────────────────────────────────────────────────
+// ─── RESULTADOS FINALES (análisis global único) ──────────────────────────────
 function mostrarResultados() {
-  // Contar desde los spans coloreados (nuestra alineación)
-  let omisiones = 0, sustituciones = 0, repeticiones = 0, correctas = 0;
+  document.getElementById("prog-wrap").classList.remove("listening");
 
-  palabras.forEach((p, i) => {
-    const span = document.getElementById("w" + i);
-    if (!span) return;
-    const cls = span.className;
-    if      (cls === "word omision")    omisiones++;
-    else if (cls === "word sustitucion") sustituciones++;
-    else if (cls === "word repeticion") repeticiones++;
-    else if (cls === "word done")       correctas++;
+  // 1. Ordenar palabras dichas por tiempo
+  const spoken = allWords.filter(w => w.Word).sort((a,b) => (a.Offset||0)-(b.Offset||0));
+  const spokenTexts = spoken.map(w => w.Word);
+
+  // 2. Reset spans
+  palabras.forEach((_, i) => { const s = document.getElementById("w"+i); if (s) s.className = "word"; });
+
+  // 3. Alineación global Needleman-Wunsch
+  const alignment = spokenTexts.length > 0
+    ? alinearNW(palabras, spokenTexts)
+    : palabras.map((p,i) => ({orig:p, origIdx:i, spoken:null, spokenIdx:-1}));
+
+  // 4. Clasificar
+  let omisiones=0, sustituciones=0, adiciones=0, inversiones=0;
+  let repeticiones=0, rectificaciones=0, vacilaciones=0, silabeo=0, pausasLargas=0, correctas=0;
+  const errDetalle = [];
+
+  alignment.forEach((item, ai) => {
+    // ── Palabra dicha de más (inserción) ──
+    if (item.orig === null) {
+      const wn = normalizar(item.spoken);
+      const prevSpoken = item.spokenIdx > 0 ? normalizar(spoken[item.spokenIdx-1].Word) : "";
+      const sig = alignment[ai+1];
+      if (prevSpoken && prevSpoken === wn) {
+        repeticiones++;
+        const span = document.getElementById("w" + (refWordIdxPrev(alignment, ai)));
+        if (span && span.className === "word done") span.className = "word repeticion";
+      } else if (sig && sig.orig && similitud(wn, normalizar(sig.orig)) >= 0.6) {
+        rectificaciones++;   // dijo algo y se autocorrigió con la palabra correcta después
+      } else {
+        adiciones++;
+      }
+      return;
+    }
+
+    const span = document.getElementById("w" + item.origIdx);
+
+    // ── Omisión ──
+    if (item.spoken === null) {
+      if (span) span.className = "word omision";
+      omisiones++;
+      errDetalle.push({word: limpiar(item.orig), tipo: "omision"});
+      return;
+    }
+
+    // ── Coincide o sustituye ──
+    const w   = spoken[item.spokenIdx];
+    const acc = w?.PronunciationAssessment?.AccuracyScore ?? 100;
+    const sim = similitud(normalizar(item.orig), normalizar(item.spoken));
+
+    if (sim >= 0.65 && acc >= 55) {
+      correctas++;
+      if (span) span.className = "word done";
+      if (acc < 62) vacilaciones++;                       // leída pero dudosa
+      if (w && detectarSilabeo(w)) { silabeo++; if (span) span.className = "word silabeo"; }
+    } else if (esInversion(item.orig, item.spoken)) {
+      inversiones++;
+      if (span) span.className = "word inversion";
+      errDetalle.push({word: limpiar(item.orig), tipo: "inversion"});
+    } else {
+      sustituciones++;
+      if (span) span.className = "word sustitucion";
+      errDetalle.push({word: limpiar(item.orig), tipo: "sustitucion"});
+    }
   });
 
-  // Vacilaciones: palabras correctas según Azure pero con AccuracyScore bajo
-  const vacilaciones = allWords.filter(w =>
-    (w.PronunciationAssessment?.ErrorType === "None") &&
-    (w.PronunciationAssessment?.AccuracyScore ?? 100) < 60
-  ).length;
+  // 5. Pausas largas entre palabras consecutivas (> 0.7s)
+  for (let i = 1; i < spoken.length; i++) {
+    const gap = (spoken[i].Offset||0) - ((spoken[i-1].Offset||0) + (spoken[i-1].Duration||0));
+    if (gap > 7000000) pausasLargas++;
+  }
+  vacilaciones += pausasLargas;   // las pausas largas cuentan como vacilación
 
-  const totalRef  = omisiones + sustituciones + repeticiones + correctas;
-  const ppm       = segundos > 0 ? Math.round((totalRef / segundos) * 60) : 0;
-  const precision = totalRef > 0 ? Math.round((correctas / totalRef) * 100) : 0;
+  // 6. Métricas globales
+  const leidas    = correctas + sustituciones + inversiones;
+  const totalRef  = correctas + sustituciones + inversiones + omisiones;
+  const ppm       = segundos > 0 ? Math.round(leidas / segundos * 60) : 0;
+  const precision = totalRef > 0 ? Math.round(correctas / totalRef * 100) : 0;
   const fluency   = fluencyCount > 0 ? Math.round(fluencyTotal / fluencyCount) : precision;
+  const prosody   = prosodyCount > 0 ? Math.round(prosodyTotal / prosodyCount) : 0;
 
-  document.getElementById("r-ppm").textContent          = ppm || "—";
-  document.getElementById("r-prec").textContent         = precision + "%";
-  document.getElementById("r-omisiones").textContent    = omisiones;
+  // 7. Pintar resultados
+  document.getElementById("r-ppm").textContent           = ppm || "—";
+  document.getElementById("r-prec").textContent          = precision + "%";
+  document.getElementById("r-omisiones").textContent     = omisiones;
   document.getElementById("r-sustituciones").textContent = sustituciones;
+  document.getElementById("r-adiciones").textContent     = adiciones;
+  document.getElementById("r-inversiones").textContent   = inversiones;
   document.getElementById("r-repeticiones").textContent  = repeticiones;
+  document.getElementById("r-rectificaciones").textContent = rectificaciones;
   document.getElementById("r-vacilaciones").textContent  = vacilaciones;
-  document.getElementById("fluency-val").textContent    = fluency + "/100";
-  document.getElementById("fluency-bar").style.width    = fluency + "%";
+  document.getElementById("r-silabeo").textContent       = silabeo;
+  document.getElementById("r-pausas").textContent        = pausasLargas;
+  document.getElementById("fluency-val").textContent     = fluency + "/100";
+  document.getElementById("fluency-bar").style.width     = fluency + "%";
+  document.getElementById("prosody-val").textContent     = prosody ? prosody + "/100" : "n/d";
+  document.getElementById("prosody-bar").style.width     = prosody + "%";
 
-  const total = omisiones + sustituciones + repeticiones;
+  const totalErr = omisiones + sustituciones + inversiones;
   const [emoji, titulo] =
-    total === 0 ? ["🌟", "¡Lectura perfecta!"] :
-    total <= 2  ? ["⭐", "¡Muy bien!"] :
-    total <= 5  ? ["👏", "¡Buen trabajo!"] :
-                  ["💪", "¡Sigue practicando!"];
+    totalErr === 0 ? ["🌟", "¡Lectura perfecta!"] :
+    totalErr <= 2  ? ["⭐", "¡Muy bien!"] :
+    totalErr <= 5  ? ["👏", "¡Buen trabajo!"] :
+                     ["💪", "¡Sigue practicando!"];
   document.getElementById("result-emoji").textContent = emoji;
   document.getElementById("result-title").textContent = titulo;
 
-  // Detalle de errores desde los spans
-  const errDetalle = [];
-  palabras.forEach((p, i) => {
-    const span = document.getElementById("w" + i);
-    if (!span) return;
-    if (span.className === "word omision")
-      errDetalle.push({word: p.replace(/[.,;:!?¡¿]/g,""), tipo: "omision"});
-    else if (span.className === "word sustitucion")
-      errDetalle.push({word: p.replace(/[.,;:!?¡¿]/g,""), tipo: "sustitucion"});
-  });
-
+  // 8. Detalle de errores
   if (errDetalle.length > 0) {
     document.getElementById("detalle-errores").style.display = "block";
     document.getElementById("lista-errores").innerHTML = errDetalle.map(e => {
-      const tag = e.tipo === "omision"
-        ? '<span class="tag tag-omision">Omisión</span>'
-        : '<span class="tag tag-sustitucion">Sustitución</span>';
+      const tag = e.tipo === "omision"     ? '<span class="tag tag-omision">Omisión</span>' :
+                  e.tipo === "inversion"   ? '<span class="tag tag-inversion">Inversión</span>' :
+                                             '<span class="tag tag-sustitucion">Sustitución</span>';
       return `<div class="error-row"><span>${e.word}</span>${tag}</div>`;
     }).join("");
+  } else {
+    document.getElementById("detalle-errores").style.display = "none";
   }
 
   document.getElementById("result").classList.add("show");
   document.getElementById("mascot").textContent = emoji;
   document.getElementById("msg").textContent    = "¡Sesión completada!";
+  document.getElementById("estado").textContent = "✓";
+  document.getElementById("prog-label").textContent = leidas + "/" + palabras.length + " palabras leídas";
   resetBtn();
 
-  guardarSesion({ ppm, precision, fluency, omisiones, sustituciones, repeticiones, vacilaciones });
+  guardarSesion({ ppm, precision, fluency, prosody, omisiones, sustituciones, adiciones,
+                  inversiones, repeticiones, rectificaciones, vacilaciones, silabeo, pausasLargas });
+}
+
+// Limpia signos de puntuación de una palabra
+function limpiar(p) { return (p||"").replace(/[.,;:!?¡¿]/g, ""); }
+
+// Devuelve el índice de la última palabra de referencia coloreada como "done"
+// antes de una inserción (para marcar repeticiones)
+function refWordIdxPrev(alignment, ai) {
+  for (let k = ai-1; k >= 0; k--) {
+    if (alignment[k].origIdx >= 0) return alignment[k].origIdx;
+  }
+  return 0;
 }
 
 // ─── Guardar sesión ──────────────────────────────────────────────────────────
-async function guardarSesion({ ppm, precision, fluency, omisiones, sustituciones, repeticiones, vacilaciones }) {
+async function guardarSesion(m) {
   const alumno = document.getElementById("alumno").value.trim();
   try {
     const { error } = await sb.from("sesiones").insert({
@@ -641,13 +708,19 @@ async function guardarSesion({ ppm, precision, fluency, omisiones, sustituciones
       texto_id:          lecturaActual.id,
       texto_titulo:      lecturaActual.titulo,
       curso:             cursoAlumno,
-      ppm,
-      precision,
-      fluency,
-      omisiones,
-      sustituciones,
-      repeticiones,
-      vacilaciones,
+      ppm:               m.ppm,
+      precision:         m.precision,
+      fluency:           m.fluency,
+      prosody:           m.prosody,
+      omisiones:         m.omisiones,
+      sustituciones:     m.sustituciones,
+      adiciones:         m.adiciones,
+      inversiones:       m.inversiones,
+      repeticiones:      m.repeticiones,
+      rectificaciones:   m.rectificaciones,
+      vacilaciones:      m.vacilaciones,
+      silabeo:           m.silabeo,
+      pausas_largas:     m.pausasLargas,
       duracion_segundos: segundos,
       fecha:             new Date().toISOString()
     });
