@@ -452,6 +452,36 @@ function normalizar(str) {
     .trim();
 }
 
+// ─── Normalización FONÉTICA del español ───────────────────────────────────────
+// Convierte una palabra a su forma "sonora" para no penalizar homófonos
+// (tuvo=tubo, echo=hecho, halla=haya, cielo=sielo, gente=jente...).
+// "los" y "las" siguen siendo distintas (vocales diferentes).
+function fonetica(str) {
+  let s = (str || "").toLowerCase()
+    .replace(/[.,;:!?¡¿\-]/g, "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .trim();
+  if (!s) return "";
+  s = s
+    .replace(/ch/g, "C")            // proteger dígrafo 'ch'
+    .replace(/rr/g, "R")            // proteger 'rr' (perro ≠ pero, son sonidos distintos)
+    .replace(/v/g, "b")              // v = b (homófono en todo el español)
+    .replace(/ll/g, "y")            // ll = y (yeísmo)
+    .replace(/qu(?=[ei])/g, "k")    // que/qui → ke/ki
+    .replace(/gu(?=[ei])/g, "G")    // gue/gui → Ge/Gi (u muda, G = g fuerte protegida)
+    .replace(/c(?=[ei])/g, "z")     // ce/ci → ze/zi (sonido /θ/ castellano, distinto de s)
+    .replace(/c/g, "k")              // resto de c → k (ca/co/cu/cl/cr)
+    .replace(/g(?=[ei])/g, "j")     // ge/gi → je/ji (g suave)
+    .replace(/G/g, "g")             // restaurar g fuerte (guerra → gera)
+    .replace(/C/g, "ch")            // restaurar 'ch'
+    .replace(/R/g, "rr")            // restaurar 'rr'
+    .replace(/x/g, "ks")            // x → ks
+    .replace(/h/g, "")              // h muda
+    .replace(/w/g, "u")
+    .trim();
+  return s;
+}
+
 function levenshtein(a, b) {
   const m = a.length, n = b.length;
   const dp = Array.from({length:m+1}, (_,i) =>
@@ -601,12 +631,14 @@ function mostrarResultados() {
       return;
     }
 
-    // ── Coincide exactamente o sustituye ──
+    // ── Coincide foneticamente o sustituye ──
     const w       = spoken[item.spokenIdx];
     const acc     = w?.PronunciationAssessment?.AccuracyScore ?? 100;
     const origN   = normalizar(item.orig);
     const spokenN = normalizar(item.spoken);
-    const exacta  = origN === spokenN;   // debe coincidir EXACTO (tras quitar tildes/signos)
+    // Correcta si suena igual (homófonos b/v, h muda, ll/y, seseo... NO son error).
+    // "los"/"las" suenan distinto → sigue siendo sustitución.
+    const exacta  = (origN === spokenN) || (fonetica(item.orig) === fonetica(item.spoken));
 
     if (exacta) {
       // Palabra leída correctamente
