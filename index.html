@@ -38,6 +38,7 @@ body { font-family: system-ui, sans-serif; background: #f5f5f0; min-height: 100v
 .word.repeticion { background: #EEEDFE; color: #3C3489; }
 .word.inversion { background: #E0EFFA; color: #0C447C; }
 .word.silabeo { background: #EAF7E1; color: #2C5016; text-decoration: underline dotted; }
+.word.vacilacion { color: #92600A; text-decoration: underline wavy #E0A845; text-underline-offset: 2px; }
 .prog-wrap { background: #f3f4f6; border-radius: 6px; height: 6px; margin-bottom: 4px; overflow: hidden; }
 .prog-fill { height: 100%; border-radius: 6px; background: #1D9E75; transition: width 0.3s; }
 .prog-wrap.listening .prog-fill { width: 100% !important; animation: progPulse 1.4s ease-in-out infinite; }
@@ -75,6 +76,8 @@ body { font-family: system-ui, sans-serif; background: #f5f5f0; min-height: 100v
 .tag-sustitucion { background: #FAEEDA; color: #633806; }
 .tag-repeticion { background: #EEEDFE; color: #3C3489; }
 .tag-inversion { background: #E0EFFA; color: #0C447C; }
+.tag-vacilacion { background: #FBF1DC; color: #92600A; }
+.tag-silabeo { background: #EAF7E1; color: #2C5016; }
 .accuracy-bar { margin-top: 0.75rem; background: #fff; border: 0.5px solid #e5e7eb; border-radius: 10px; padding: 0.75rem; }
 .accuracy-label { font-size: 11px; color: #6b7280; margin-bottom: 4px; display: flex; justify-content: space-between; }
 .accuracy-track { background: #f3f4f6; border-radius: 4px; height: 8px; overflow: hidden; }
@@ -113,6 +116,7 @@ body { font-family: system-ui, sans-serif; background: #f5f5f0; min-height: 100v
       <div class="ley-item"><div class="ley-dot" style="background:#7FB5E6"></div>Inversión</div>
       <div class="ley-item"><div class="ley-dot" style="background:#AFA9EC"></div>Repetición</div>
       <div class="ley-item"><div class="ley-dot" style="background:#9BC77A"></div>Silabeo</div>
+      <div class="ley-item"><div class="ley-dot" style="background:#E0A845"></div>Vacilación</div>
     </div>
     <div class="reading" id="texto"></div>
   </div>
@@ -166,7 +170,7 @@ body { font-family: system-ui, sans-serif; background: #f5f5f0; min-height: 100v
     </div>
 
     <div class="error-list" id="detalle-errores" style="display:none; margin-top:0.75rem;">
-      <div class="error-titulo">Detalle de errores</div>
+      <div class="error-titulo">Detalle de la lectura</div>
       <div id="lista-errores"></div>
     </div>
     <div class="guardado" id="guardado">✓ Sesión guardada</div>
@@ -598,10 +602,19 @@ function mostrarResultados() {
     ? alinearNW(palabras, spokenTexts)
     : palabras.map((p,i) => ({orig:p, origIdx:i, spoken:null, spokenIdx:-1}));
 
-  // 4. Clasificar
+  // 4a. Pausas largas ANTES de cada palabra dicha (gap > 0.7s) → set de índices
+  let pausasLargas = 0;
+  const pausaAntes = new Set();
+  for (let i = 1; i < spoken.length; i++) {
+    const gap = (spoken[i].Offset||0) - ((spoken[i-1].Offset||0) + (spoken[i-1].Duration||0));
+    if (gap > 7000000) { pausasLargas++; pausaAntes.add(i); }
+  }
+
+  // 4b. Clasificar
   let omisiones=0, sustituciones=0, adiciones=0, inversiones=0;
-  let repeticiones=0, rectificaciones=0, vacilaciones=0, silabeo=0, pausasLargas=0, correctas=0;
-  const errDetalle = [];
+  let repeticiones=0, rectificaciones=0, vacilaciones=0, silabeo=0, correctas=0;
+  const errDetalle = [];   // errores: omisión, sustitución, inversión
+  const obsDetalle = [];   // observaciones de fluidez: vacilación, silabeo, repetición
 
   alignment.forEach((item, ai) => {
     // ── Palabra dicha de más (inserción) ──
@@ -611,8 +624,10 @@ function mostrarResultados() {
       const sig = alignment[ai+1];
       if (prevSpoken && prevSpoken === wn) {
         repeticiones++;
-        const span = document.getElementById("w" + (refWordIdxPrev(alignment, ai)));
+        const idxPrev = refWordIdxPrev(alignment, ai);
+        const span = document.getElementById("w" + idxPrev);
         if (span && span.className === "word done") span.className = "word repeticion";
+        obsDetalle.push({word: limpiar(palabras[idxPrev] || item.spoken), tipo: "repeticion"});
       } else if (sig && sig.orig && similitud(wn, normalizar(sig.orig)) >= 0.6) {
         rectificaciones++;   // dijo algo y se autocorrigió con la palabra correcta después
       } else {
@@ -636,35 +651,37 @@ function mostrarResultados() {
     const acc     = w?.PronunciationAssessment?.AccuracyScore ?? 100;
     const origN   = normalizar(item.orig);
     const spokenN = normalizar(item.spoken);
-    // Correcta si suena igual (homófonos b/v, h muda, ll/y, seseo... NO son error).
-    // "los"/"las" suenan distinto → sigue siendo sustitución.
     const exacta  = (origN === spokenN) || (fonetica(item.orig) === fonetica(item.spoken));
 
     if (exacta) {
       // Palabra leída correctamente
       correctas++;
-      if (span) span.className = "word done";
-      if (acc < 60) vacilaciones++;                       // bien leída pero pronunciación dudosa
-      if (w && detectarSilabeo(w)) { silabeo++; if (span) span.className = "word silabeo"; }
+      const haySilabeo    = w && detectarSilabeo(w);
+      const hayPausaAntes = pausaAntes.has(item.spokenIdx);
+      const dudosa        = acc < 60;
+
+      if (haySilabeo) {
+        silabeo++;
+        if (span) span.className = "word silabeo";
+        obsDetalle.push({word: limpiar(item.orig), tipo: "silabeo"});
+      } else if (dudosa || hayPausaAntes) {
+        vacilaciones++;
+        if (span) span.className = "word vacilacion";
+        const motivo = hayPausaAntes ? "pausa" : "dudosa";
+        obsDetalle.push({word: limpiar(item.orig), tipo: "vacilacion", motivo});
+      } else {
+        if (span) span.className = "word done";
+      }
     } else if (esInversion(item.orig, item.spoken)) {
-      // Mismas letras, distinto orden ("los"→"sol", "pra"→"par")
       inversiones++;
       if (span) span.className = "word inversion";
       errDetalle.push({word: limpiar(item.orig), tipo: "inversion", dicho: limpiar(item.spoken)});
     } else {
-      // Palabra distinta = sustitución ("los"→"las", "grifo"→"grito"...)
       sustituciones++;
       if (span) span.className = "word sustitucion";
       errDetalle.push({word: limpiar(item.orig), tipo: "sustitucion", dicho: limpiar(item.spoken)});
     }
   });
-
-  // 5. Pausas largas entre palabras consecutivas (> 0.7s)
-  for (let i = 1; i < spoken.length; i++) {
-    const gap = (spoken[i].Offset||0) - ((spoken[i-1].Offset||0) + (spoken[i-1].Duration||0));
-    if (gap > 7000000) pausasLargas++;
-  }
-  vacilaciones += pausasLargas;   // las pausas largas cuentan como vacilación
 
   // 6. Métricas globales
   const leidas    = correctas + sustituciones + inversiones;
@@ -700,15 +717,21 @@ function mostrarResultados() {
   document.getElementById("result-emoji").textContent = emoji;
   document.getElementById("result-title").textContent = titulo;
 
-  // 8. Detalle de errores
-  if (errDetalle.length > 0) {
+  // 8. Detalle: errores de exactitud + observaciones de fluidez
+  const todo = errDetalle.concat(obsDetalle);
+  if (todo.length > 0) {
     document.getElementById("detalle-errores").style.display = "block";
-    document.getElementById("lista-errores").innerHTML = errDetalle.map(e => {
-      const tag = e.tipo === "omision"     ? '<span class="tag tag-omision">Omisión</span>' :
-                  e.tipo === "inversion"   ? '<span class="tag tag-inversion">Inversión</span>' :
-                                             '<span class="tag tag-sustitucion">Sustitución</span>';
+    document.getElementById("lista-errores").innerHTML = todo.map(e => {
+      const tag =
+        e.tipo === "omision"     ? '<span class="tag tag-omision">Omisión</span>' :
+        e.tipo === "inversion"   ? '<span class="tag tag-inversion">Inversión</span>' :
+        e.tipo === "sustitucion" ? '<span class="tag tag-sustitucion">Sustitución</span>' :
+        e.tipo === "vacilacion"  ? '<span class="tag tag-vacilacion">Vacilación</span>' :
+        e.tipo === "silabeo"     ? '<span class="tag tag-silabeo">Silabeo</span>' :
+        e.tipo === "repeticion"  ? '<span class="tag tag-repeticion">Repetición</span>' : '';
       const extra = (e.dicho && e.tipo !== "omision")
-        ? ` <span style="color:#c0c0c0">→ ${e.dicho}</span>` : "";
+        ? ` <span style="color:#c0c0c0">→ ${e.dicho}</span>`
+        : (e.motivo === "pausa" ? ` <span style="color:#c0c0c0">(pausa antes)</span>` : "");
       return `<div class="error-row"><span>${e.word}${extra}</span>${tag}</div>`;
     }).join("");
   } else {
