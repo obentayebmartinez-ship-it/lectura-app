@@ -601,24 +601,29 @@ function mostrarResultados() {
       return;
     }
 
-    // ── Coincide o sustituye ──
-    const w   = spoken[item.spokenIdx];
-    const acc = w?.PronunciationAssessment?.AccuracyScore ?? 100;
-    const sim = similitud(normalizar(item.orig), normalizar(item.spoken));
+    // ── Coincide exactamente o sustituye ──
+    const w       = spoken[item.spokenIdx];
+    const acc     = w?.PronunciationAssessment?.AccuracyScore ?? 100;
+    const origN   = normalizar(item.orig);
+    const spokenN = normalizar(item.spoken);
+    const exacta  = origN === spokenN;   // debe coincidir EXACTO (tras quitar tildes/signos)
 
-    if (sim >= 0.65 && acc >= 55) {
+    if (exacta) {
+      // Palabra leída correctamente
       correctas++;
       if (span) span.className = "word done";
-      if (acc < 62) vacilaciones++;                       // leída pero dudosa
+      if (acc < 60) vacilaciones++;                       // bien leída pero pronunciación dudosa
       if (w && detectarSilabeo(w)) { silabeo++; if (span) span.className = "word silabeo"; }
     } else if (esInversion(item.orig, item.spoken)) {
+      // Mismas letras, distinto orden ("los"→"sol", "pra"→"par")
       inversiones++;
       if (span) span.className = "word inversion";
-      errDetalle.push({word: limpiar(item.orig), tipo: "inversion"});
+      errDetalle.push({word: limpiar(item.orig), tipo: "inversion", dicho: limpiar(item.spoken)});
     } else {
+      // Palabra distinta = sustitución ("los"→"las", "grifo"→"grito"...)
       sustituciones++;
       if (span) span.className = "word sustitucion";
-      errDetalle.push({word: limpiar(item.orig), tipo: "sustitucion"});
+      errDetalle.push({word: limpiar(item.orig), tipo: "sustitucion", dicho: limpiar(item.spoken)});
     }
   });
 
@@ -670,7 +675,9 @@ function mostrarResultados() {
       const tag = e.tipo === "omision"     ? '<span class="tag tag-omision">Omisión</span>' :
                   e.tipo === "inversion"   ? '<span class="tag tag-inversion">Inversión</span>' :
                                              '<span class="tag tag-sustitucion">Sustitución</span>';
-      return `<div class="error-row"><span>${e.word}</span>${tag}</div>`;
+      const extra = (e.dicho && e.tipo !== "omision")
+        ? ` <span style="color:#c0c0c0">→ ${e.dicho}</span>` : "";
+      return `<div class="error-row"><span>${e.word}${extra}</span>${tag}</div>`;
     }).join("");
   } else {
     document.getElementById("detalle-errores").style.display = "none";
