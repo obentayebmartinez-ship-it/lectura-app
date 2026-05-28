@@ -31,13 +31,13 @@ body { font-family: system-ui, sans-serif; background: #f5f5f0; min-height: 100v
 .ley-item { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #6b7280; }
 .ley-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
 .reading { font-size: 19px; line-height: 2; color: #111; }
-.word { display: inline; border-radius: 3px; padding: 1px 2px; }
+.word { display: inline; border-radius: 3px; padding: 1px 4px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .word.done { color: #9ca3af; }
-.word.omision { background: #FCEBEB; color: #791F1F; padding: 1px 4px; }
-.word.sustitucion { background: #FAEEDA; color: #633806; padding: 1px 4px; }
-.word.repeticion { background: #EEEDFE; color: #3C3489; padding: 1px 4px; }
-.word.inversion { background: #E0EFFA; color: #0C447C; padding: 1px 4px; }
-.word.silabeo { background: #EAF7E1; color: #2C5016; padding: 1px 4px; text-decoration: underline dotted; }
+.word.omision { background: #FCEBEB; color: #791F1F; }
+.word.sustitucion { background: #FAEEDA; color: #633806; }
+.word.repeticion { background: #EEEDFE; color: #3C3489; }
+.word.inversion { background: #E0EFFA; color: #0C447C; }
+.word.silabeo { background: #EAF7E1; color: #2C5016; text-decoration: underline dotted; }
 .prog-wrap { background: #f3f4f6; border-radius: 6px; height: 6px; margin-bottom: 4px; overflow: hidden; }
 .prog-fill { height: 100%; border-radius: 6px; background: #1D9E75; transition: width 0.3s; }
 .prog-wrap.listening .prog-fill { width: 100% !important; animation: progPulse 1.4s ease-in-out infinite; }
