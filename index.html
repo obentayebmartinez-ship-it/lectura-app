@@ -30,9 +30,48 @@ body { font-family: system-ui, sans-serif; background: #f5f5f0; min-height: 100v
 .leyenda { display: flex; gap: 12px; margin-bottom: 0.75rem; flex-wrap: wrap; }
 .ley-item { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #6b7280; }
 .ley-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
-.reading { font-size: 19px; line-height: 2; color: #111; }
+.reading { font-size: 19px; line-height: 2; color: #111; overflow: visible; }
 .word { display: inline; border-radius: 3px; padding: 1px 4px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .word.done { color: #9ca3af; }
+.word.omision, .word.sustitucion, .word.inversion, .word.repeticion, .word.silabeo, .word.vacilacion { cursor: help; position: relative; }
+
+/* ── Tooltip tipo bocadillo ── */
+.word[data-tip]:hover::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  background: #1f2937;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.35;
+  letter-spacing: 0.1px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  white-space: normal;
+  width: max-content;
+  max-width: 230px;
+  text-align: center;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.18);
+  z-index: 50;
+  pointer-events: none;
+  animation: tipIn 0.12s ease-out;
+}
+.word[data-tip]:hover::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 2px);
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: #1f2937;
+  z-index: 50;
+  pointer-events: none;
+  animation: tipIn 0.12s ease-out;
+}
+@keyframes tipIn { from { opacity: 0; transform: translateX(-50%) translateY(3px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
 .word.omision { background: #FCEBEB; color: #791F1F; }
 .word.sustitucion { background: #FAEEDA; color: #633806; }
 .word.repeticion { background: #EEEDFE; color: #3C3489; }
@@ -371,7 +410,7 @@ async function iniciar() {
   segundos     = 0;
   palabras.forEach((_, i) => {
     const s = document.getElementById("w" + i);
-    if (s) s.className = "word";
+    if (s) { s.className = "word"; delete s.dataset.tip; }
   });
   document.getElementById("prog-wrap").classList.add("listening");
   document.getElementById("prog-label").textContent = "Escuchando... lee con calma";
@@ -595,7 +634,7 @@ function mostrarResultados() {
   const spokenTexts = spoken.map(w => w.Word);
 
   // 2. Reset spans
-  palabras.forEach((_, i) => { const s = document.getElementById("w"+i); if (s) s.className = "word"; });
+  palabras.forEach((_, i) => { const s = document.getElementById("w"+i); if (s) { s.className = "word"; delete s.dataset.tip; } });
 
   // 3. Alineación global Needleman-Wunsch
   const alignment = spokenTexts.length > 0
@@ -626,7 +665,7 @@ function mostrarResultados() {
         repeticiones++;
         const idxPrev = refWordIdxPrev(alignment, ai);
         const span = document.getElementById("w" + idxPrev);
-        if (span && span.className === "word done") span.className = "word repeticion";
+        if (span && span.className === "word done") { span.className = "word repeticion"; span.dataset.tip = "Repetición · repitió esta palabra"; }
         obsDetalle.push({word: limpiar(palabras[idxPrev] || item.spoken), tipo: "repeticion"});
       } else if (sig && sig.orig && similitud(wn, normalizar(sig.orig)) >= 0.6) {
         rectificaciones++;   // dijo algo y se autocorrigió con la palabra correcta después
@@ -640,7 +679,7 @@ function mostrarResultados() {
 
     // ── Omisión ──
     if (item.spoken === null) {
-      if (span) span.className = "word omision";
+      if (span) { span.className = "word omision"; span.dataset.tip = "Omisión · no leyó esta palabra"; }
       omisiones++;
       errDetalle.push({word: limpiar(item.orig), tipo: "omision"});
       return;
@@ -662,23 +701,23 @@ function mostrarResultados() {
 
       if (haySilabeo) {
         silabeo++;
-        if (span) span.className = "word silabeo";
+        if (span) { span.className = "word silabeo"; span.dataset.tip = "Silabeo · leída sílaba a sílaba"; }
         obsDetalle.push({word: limpiar(item.orig), tipo: "silabeo"});
       } else if (dudosa || hayPausaAntes) {
         vacilaciones++;
-        if (span) span.className = "word vacilacion";
         const motivo = hayPausaAntes ? "pausa" : "dudosa";
+        if (span) { span.className = "word vacilacion"; span.dataset.tip = hayPausaAntes ? "Vacilación · pausa antes de leerla" : "Vacilación · leída con duda"; }
         obsDetalle.push({word: limpiar(item.orig), tipo: "vacilacion", motivo});
       } else {
         if (span) span.className = "word done";
       }
     } else if (esInversion(item.orig, item.spoken)) {
       inversiones++;
-      if (span) span.className = "word inversion";
+      if (span) { span.className = "word inversion"; span.dataset.tip = "Inversión · dijo «" + limpiar(item.spoken) + "» (letras cambiadas)"; }
       errDetalle.push({word: limpiar(item.orig), tipo: "inversion", dicho: limpiar(item.spoken)});
     } else {
       sustituciones++;
-      if (span) span.className = "word sustitucion";
+      if (span) { span.className = "word sustitucion"; span.dataset.tip = "Sustitución · dijo «" + limpiar(item.spoken) + "» en vez de «" + limpiar(item.orig) + "»"; }
       errDetalle.push({word: limpiar(item.orig), tipo: "sustitucion", dicho: limpiar(item.spoken)});
     }
   });
