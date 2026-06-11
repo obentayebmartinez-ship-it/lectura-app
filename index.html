@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LectorIA v2.1</title>
+<title>LectorIA v3.0</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://aka.ms/csspeech/jsbrowserpackageraw"></script>
 <style>
@@ -154,7 +154,6 @@ body { font-family: system-ui, sans-serif; background: #f5f5f0; min-height: 100v
       <div class="ley-item"><div class="ley-dot" style="background:#EF9F27"></div>Sustitución</div>
       <div class="ley-item"><div class="ley-dot" style="background:#7FB5E6"></div>Inversión</div>
       <div class="ley-item"><div class="ley-dot" style="background:#AFA9EC"></div>Repetición</div>
-      <div class="ley-item"><div class="ley-dot" style="background:#9BC77A"></div>Silabeo</div>
       <div class="ley-item"><div class="ley-dot" style="background:#E0A845"></div>Vacilación</div>
     </div>
     <div class="reading" id="texto"></div>
@@ -195,7 +194,6 @@ body { font-family: system-ui, sans-serif; background: #f5f5f0; min-height: 100v
       <div class="result-item"><div class="result-n warn" id="r-repeticiones">0</div><div class="result-l">repetic.</div></div>
       <div class="result-item"><div class="result-n warn" id="r-rectificaciones">0</div><div class="result-l">rectificac.</div></div>
       <div class="result-item"><div class="result-n warn" id="r-vacilaciones">0</div><div class="result-l">vacilac.</div></div>
-      <div class="result-item"><div class="result-n warn" id="r-silabeo">0</div><div class="result-l">silabeo</div></div>
       <div class="result-item"><div class="result-n warn" id="r-pausas">0</div><div class="result-l">pausas</div></div>
     </div>
 
@@ -217,7 +215,7 @@ body { font-family: system-ui, sans-serif; background: #f5f5f0; min-height: 100v
 </div>
 
 <script>
-console.log("LectorIA · motor de análisis v2.1");
+console.log("LectorIA · motor de análisis v3.0");
 // ─── Supabase ────────────────────────────────────────────────────────────────
 const SUPABASE_URL = "https://mvwuyxrlkyikfgxzokxv.supabase.co";
 const SUPABASE_KEY = "sb_publishable_SNSZe5l2R3jcxiHxcxEqgg_XBrW-Xvi";
@@ -604,30 +602,6 @@ function esInversion(target, spoken) {
   return ord(t) === ord(s);   // mismas letras (sonidos), distinto orden
 }
 
-// ─── Detección de silabeo (gaps entre sílabas o palabra muy lenta) ────────────
-function detectarSilabeo(w, baseCharDur) {
-  const syl = w.Syllables;
-  if (syl && syl.length >= 2) {
-    let g20 = 0, g35 = 0;
-    for (let k = 1; k < syl.length; k++) {
-      const prev = syl[k-1], cur = syl[k];
-      const gap = (cur.Offset||0) - ((prev.Offset||0) + (prev.Duration||0));
-      if (gap > 3500000) g35++;          // corte claro entre sílabas (>0.35s)
-      else if (gap > 2000000) g20++;     // micro-corte (>0.2s)
-    }
-    // 1 corte claro, o 2+ micro-cortes → silabeo. Un único micro-corte
-    // aislado ya no marca (eliminaba muchos falsos positivos).
-    return g35 >= 1 || g20 >= 2;
-  }
-  // Sin datos de sílaba: duración/carácter relativa al RITMO DEL PROPIO ALUMNO
-  // (un lector lento no debe salir lleno de "silabeo" por ser lento).
-  const durSeg = (w.Duration||0) / 10000000;
-  const chars  = fonetica(w.Word).length;
-  if (chars < 4) return false;
-  const umbral = Math.max(0.22, (baseCharDur || 0.12) * 2.5);
-  return (durSeg / chars) > umbral;
-}
-
 // ─── Muletillas habladas que NO deben contarse como adición ──────────────────
 const MULETILLAS = new Set(["eh","ehh","em","emm","mm","mmm","um","uhm","ah","aah"]);
 
@@ -705,18 +679,26 @@ function mostrarResultados() {
     ? alinearNW(palabras, spokenTexts)
     : palabras.map((p,i) => ({orig:p, origIdx:i, spoken:null, spokenIdx:-1}));
 
-  // 4a. Silencio ANTES de cada palabra dicha + ritmo base del alumno
+  // 3b. Si la lectura se interrumpió antes del final (botón pulsado antes de
+  // terminar), la cola de palabras no leídas NO debe contar como omisiones.
+  let lastSpokenAi = -1;
+  alignment.forEach((it, k) => { if (it.spoken !== null) lastSpokenAi = k; });
+
+  // 4a. Silencio ANTES de cada palabra dicha + umbral ADAPTATIVO de pausa.
+  // Un lector lento deja huecos mayores entre TODAS las palabras: la pausa
+  // que señala vacilación es la que destaca sobre SU propio ritmo, no un
+  // valor fijo. Umbral = max(0.8s, 3× su gap mediano entre palabras).
   const gapAntes = new Map();
+  const gaps = [];
   for (let i = 1; i < spoken.length; i++) {
     const gap = (spoken[i].Offset||0) - ((spoken[i-1].Offset||0) + (spoken[i-1].Duration||0));
     gapAntes.set(i, gap);
+    if (gap > 0) gaps.push(gap);
   }
-  // Mediana de segundos-por-letra del propio alumno (para silabeo adaptativo)
-  const ratios = spoken.map(w => {
-    const c = fonetica(w.Word).length;
-    return c > 0 ? ((w.Duration||0) / 10000000) / c : 0;
-  }).filter(r => r > 0).sort((x, y) => x - y);
-  const baseCharDur = ratios.length ? ratios[Math.floor(ratios.length / 2)] : 0.12;
+  gaps.sort((x, y) => x - y);
+  const gapMediano       = gaps.length ? gaps[Math.floor(gaps.length / 2)] : 0;
+  const umbralPausa      = Math.max(8000000,  gapMediano * 3);   // ≥0.8s
+  const umbralPausaPunt  = Math.max(20000000, umbralPausa * 2.5); // tras . , ; : ≥2s
   let pausasLargas = 0;   // se cuentan durante la clasificación (con contexto)
 
   // 4b. Clasificar
@@ -753,6 +735,11 @@ function mostrarResultados() {
 
     // ── Omisión ──
     if (item.spoken === null) {
+      // Cola no leída: la sesión terminó antes de llegar aquí.
+      if (ai > lastSpokenAi) {
+        if (span) { span.className = "word"; span.dataset.tip = "No leída · la lectura terminó antes de esta palabra"; }
+        return;
+      }
       // Palabra funcional corta: el reconocedor se las traga con frecuencia
       // aunque el alumno las diga → señalar sin contabilizar.
       if (PALABRAS_FUNCIONALES.has(normalizar(item.orig))) {
@@ -775,12 +762,12 @@ function mostrarResultados() {
       // Palabra leída correctamente (cuenta para precisión aunque se repita)
       correctas++;
       const esRepetida = w && w._repetida;
-      const haySilabeo = w && detectarSilabeo(w, baseCharDur);
       // Pausa: solo cuenta como vacilación si NO viene tras un signo de
-      // puntuación (pausar en el punto/coma es prosodia CORRECTA, no duda).
+      // puntuación (pausar en el punto/coma es prosodia CORRECTA, no duda),
+      // y el umbral se adapta al ritmo del propio alumno.
       const gap            = gapAntes.get(item.spokenIdx) || 0;
       const trasPuntuacion = item.origIdx > 0 && /[.,;:!?…»)]$/.test(palabras[item.origIdx - 1]);
-      const hayPausaAntes  = gap > (trasPuntuacion ? 20000000 : 7000000);  // 2s vs 0.7s
+      const hayPausaAntes  = gap > (trasPuntuacion ? umbralPausaPunt : umbralPausa);
       if (hayPausaAntes) pausasLargas++;
 
       if (esRepetida) {
@@ -788,10 +775,6 @@ function mostrarResultados() {
         const veces = w._repetida;
         if (span) { span.className = "word repeticion"; span.dataset.tip = "Repetición · la dijo " + veces + " veces"; }
         obsDetalle.push({word: limpiar(item.orig), tipo: "repeticion"});
-      } else if (haySilabeo) {
-        silabeo++;
-        if (span) { span.className = "word silabeo"; span.dataset.tip = "Silabeo · leída sílaba a sílaba"; }
-        obsDetalle.push({word: limpiar(item.orig), tipo: "silabeo"});
       } else if (hayPausaAntes) {
         vacilaciones++;
         if (span) { span.className = "word vacilacion"; span.dataset.tip = "Vacilación · pausa de " + (gap/10000000).toFixed(1) + "s antes de leerla"; }
@@ -837,7 +820,6 @@ function mostrarResultados() {
   document.getElementById("r-repeticiones").textContent  = repeticiones;
   document.getElementById("r-rectificaciones").textContent = rectificaciones;
   document.getElementById("r-vacilaciones").textContent  = vacilaciones;
-  document.getElementById("r-silabeo").textContent       = silabeo;
   document.getElementById("r-pausas").textContent        = pausasLargas;
   document.getElementById("fluency-val").textContent     = fluency + "/100";
   document.getElementById("fluency-bar").style.width     = fluency + "%";
@@ -848,6 +830,7 @@ function mostrarResultados() {
   const totalFluidez = repeticiones + vacilaciones + silabeo;
   const totalTodo    = totalErr + totalFluidez;
   const [emoji, titulo] =
+    leidas === 0                       ? ["🤔", "No se detectó la lectura"] :
     totalTodo === 0                    ? ["🌟", "¡Lectura perfecta!"] :
     (totalErr === 0 && totalTodo <= 3) ? ["⭐", "¡Muy bien!"] :
     (totalErr <= 2 && totalTodo <= 5)  ? ["⭐", "¡Muy bien!"] :
@@ -890,7 +873,7 @@ function mostrarResultados() {
   // 9. Diagnóstico descargable: datos crudos de Azure + alineamiento, para
   // poder afinar la herramienta contra lecturas reales con errores conocidos.
   window.__lectoria_diag = {
-    version: "motor v2.1",
+    version: "motor v3.0",
     fecha: new Date().toISOString(),
     texto_id: lecturaActual.id,
     segundos_pared: segundos,
