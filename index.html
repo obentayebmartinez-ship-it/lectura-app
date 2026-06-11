@@ -443,6 +443,13 @@ async function iniciar() {
     const speechConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(AZURE_TOKEN, AZURE_REGION);
     speechConfig.speechRecognitionLanguage = "es-ES";
 
+    // Segmentación tolerante: un niño que vacila no debe cortar la utterance
+    // (preserva Offsets/Syllables coherentes y mejora fluencyScore).
+    try {
+      speechConfig.setProperty(SpeechSDK.PropertyId.Speech_SegmentationSilenceTimeoutMs, "1500");
+      speechConfig.setProperty(SpeechSDK.PropertyId.SpeechServiceConnection_InitialSilenceTimeoutMs, "15000");
+    } catch(e) { console.warn("No se pudieron ajustar timeouts de segmentación", e); }
+
     // Pronunciation Assessment — granularidad FONEMA (sílabas) + prosodia
     const pronConfig = new SpeechSDK.PronunciationAssessmentConfig(
       textOriginal,
@@ -463,7 +470,15 @@ async function iniciar() {
       if (pr.fluencyScore) { fluencyTotal += pr.fluencyScore; fluencyCount++; }
       if (pr.prosodyScore) { prosodyTotal += pr.prosodyScore; prosodyCount++; }
       const words = pr.detailResult?.Words || [];
-      words.forEach(w => { if (w && w.Word) allWords.push(w); });
+      words.forEach(w => {
+        if (!w || !w.Word) return;
+        // CRÍTICO: con enableMiscue + texto de referencia, Azure mete en Words[]
+        // las palabras del texto que NO se dijeron (ErrorType "Omission").
+        // No son habla real: si entran en allWords enmascaran las omisiones.
+        const et = w.PronunciationAssessment?.ErrorType || w.ErrorType;
+        if (et === "Omission") return;
+        allWords.push(w);
+      });
       // Feedback ligero: cuántas palabras llevamos oídas (sin colorear)
       document.getElementById("estado").textContent = allWords.length + " 👂";
     };
@@ -490,8 +505,10 @@ async function iniciar() {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function normalizar(str) {
   return (str || "").toLowerCase()
-    .replace(/[.,;:!?¡¿\-]/g, "")
+    .replace(/[.,;:!?¡¿\-«»()"']/g, "")
+    .replace(/ñ/g, "N")                              // proteger ñ: NFD la rompería (uña ≠ una)
     .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/N/g, "ñ")
     .trim();
 }
 
@@ -501,8 +518,10 @@ function normalizar(str) {
 // "los" y "las" siguen siendo distintas (vocales diferentes).
 function fonetica(str) {
   let s = (str || "").toLowerCase()
-    .replace(/[.,;:!?¡¿\-]/g, "")
+    .replace(/[.,;:!?¡¿\-«»()"']/g, "")
+    .replace(/ñ/g, "N")                              // proteger ñ antes de NFD
     .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/N/g, "ñ")
     .trim();
   if (!s) return "";
   s = s
@@ -559,7 +578,7 @@ function alinearNW(origWords, spokenWords) {
   for (let j=1;j<=n;j++){dp[0][j]=j*GAP;tb[0][j]=2;}
   for (let i=1;i<=m;i++){
     for (let j=1;j<=n;j++){
-      const sim = similitud(normalizar(origWords[i-1]), normalizar(spokenWords[j-1]));
+      const sim = similitud(fonetica(origWords[i-1]), fonetica(spokenWords[j-1]));
       const ms  = sim*2-1;
       const d=dp[i-1][j-1]+ms, u=dp[i-1][j]+GAP, l=dp[i][j-1]+GAP;
       if (d>=u&&d>=l){dp[i][j]=d;tb[i][j]=0;}
@@ -578,29 +597,48 @@ function alinearNW(origWords, spokenWords) {
 
 // ─── Detección de inversión (anagrama: mismas letras, distinto orden) ─────────
 function esInversion(target, spoken) {
-  const t = normalizar(target), s = normalizar(spoken);
-  if (t === s || t.length !== s.length || t.length < 3) return false;
+  const t = fonetica(target), s = fonetica(spoken);
+  if (t === s || t.length !== s.length || t.length < 2) return false;
   const ord = x => x.split("").sort().join("");
-  return ord(t) === ord(s);
+  return ord(t) === ord(s);   // mismas letras (sonidos), distinto orden
 }
 
 // ─── Detección de silabeo (gaps entre sílabas o palabra muy lenta) ────────────
-function detectarSilabeo(w) {
+function detectarSilabeo(w, baseCharDur) {
   const syl = w.Syllables;
   if (syl && syl.length >= 2) {
-    let gaps = 0;
+    let g20 = 0, g35 = 0;
     for (let k = 1; k < syl.length; k++) {
       const prev = syl[k-1], cur = syl[k];
       const gap = (cur.Offset||0) - ((prev.Offset||0) + (prev.Duration||0));
-      if (gap > 2000000) gaps++;   // > 0.2s entre sílabas
+      if (gap > 3500000) g35++;          // corte claro entre sílabas (>0.35s)
+      else if (gap > 2000000) g20++;     // micro-corte (>0.2s)
     }
-    return gaps >= 1;
+    // 1 corte claro, o 2+ micro-cortes → silabeo. Un único micro-corte
+    // aislado ya no marca (eliminaba muchos falsos positivos).
+    return g35 >= 1 || g20 >= 2;
   }
-  // Sin datos de sílaba: heurística por duración/carácter
+  // Sin datos de sílaba: duración/carácter relativa al RITMO DEL PROPIO ALUMNO
+  // (un lector lento no debe salir lleno de "silabeo" por ser lento).
   const durSeg = (w.Duration||0) / 10000000;
-  const chars  = (w.Word||"").length;
-  return chars >= 4 && (durSeg / chars) > 0.20;
+  const chars  = fonetica(w.Word).length;
+  if (chars < 4) return false;
+  const umbral = Math.max(0.22, (baseCharDur || 0.12) * 2.5);
+  return (durSeg / chars) > umbral;
 }
+
+// ─── Corte prosódico inesperado según Azure (señal extra de vacilación) ──────
+function unexpectedBreak(w) {
+  const br = w?.Feedback?.Prosody?.Break;
+  if (!br) return false;
+  const et = br.ErrorTypes || br.errorTypes;
+  if (!Array.isArray(et) || !et.includes("UnexpectedBreak")) return false;
+  const conf = br.UnexpectedBreak?.Confidence;
+  return conf === undefined || conf >= 0.75;
+}
+
+// ─── Muletillas habladas que NO deben contarse como adición ──────────────────
+const MULETILLAS = new Set(["eh","ehh","em","emm","mm","mmm","um","uhm","ah","aah"]);
 
 // ─── PARAR ───────────────────────────────────────────────────────────────────
 function parar() {
@@ -632,17 +670,24 @@ function mostrarResultados() {
   // 1. Ordenar palabras dichas por tiempo
   const spokenRaw = allWords.filter(w => w.Word).sort((a,b) => (a.Offset||0)-(b.Offset||0));
 
-  // 1b. Colapsar REPETICIONES consecutivas (independiente del alineador).
-  // Si el alumno dice la misma palabra 2+ veces seguidas, se cuenta como
-  // repetición y se conserva solo una copia para alinear.
+  // 1b. Colapsar REPETICIONES por n-gramas (1 a 3 palabras).
+  // Cubre "casa casa" Y regresiones de frase: "el perro... el perro ladra".
+  // Se conserva una sola copia para alinear y se marca _repetida.
   const spoken = [];
-  for (let i = 0; i < spokenRaw.length; i++) {
-    const cur  = spokenRaw[i];
-    const last = spoken[spoken.length - 1];
-    if (last && fonetica(last.Word) === fonetica(cur.Word) && fonetica(cur.Word) !== "") {
-      last._repetida = (last._repetida || 1) + 1;   // nº de veces dicha
-    } else {
-      spoken.push(cur);
+  for (const cur of spokenRaw) {
+    spoken.push(cur);
+    for (let n = 1; n <= 3; n++) {
+      if (spoken.length < 2 * n) continue;
+      const a = spoken.slice(-n), b = spoken.slice(-2 * n, -n);
+      const igual = a.every((w, k) => {
+        const f = fonetica(w.Word);
+        return f !== "" && f === fonetica(b[k].Word);
+      });
+      if (igual) {
+        b.forEach(w => { w._repetida = (w._repetida || 1) + 1; });
+        spoken.length -= n;   // descartar la copia repetida
+        break;
+      }
     }
   }
   const spokenTexts = spoken.map(w => w.Word);
@@ -655,13 +700,19 @@ function mostrarResultados() {
     ? alinearNW(palabras, spokenTexts)
     : palabras.map((p,i) => ({orig:p, origIdx:i, spoken:null, spokenIdx:-1}));
 
-  // 4a. Pausas largas ANTES de cada palabra dicha (gap > 0.7s) → set de índices
-  let pausasLargas = 0;
-  const pausaAntes = new Set();
+  // 4a. Silencio ANTES de cada palabra dicha + ritmo base del alumno
+  const gapAntes = new Map();
   for (let i = 1; i < spoken.length; i++) {
     const gap = (spoken[i].Offset||0) - ((spoken[i-1].Offset||0) + (spoken[i-1].Duration||0));
-    if (gap > 7000000) { pausasLargas++; pausaAntes.add(i); }
+    gapAntes.set(i, gap);
   }
+  // Mediana de segundos-por-letra del propio alumno (para silabeo adaptativo)
+  const ratios = spoken.map(w => {
+    const c = fonetica(w.Word).length;
+    return c > 0 ? ((w.Duration||0) / 10000000) / c : 0;
+  }).filter(r => r > 0).sort((x, y) => x - y);
+  const baseCharDur = ratios.length ? ratios[Math.floor(ratios.length / 2)] : 0.12;
+  let pausasLargas = 0;   // se cuentan durante la clasificación (con contexto)
 
   // 4b. Clasificar
   let omisiones=0, sustituciones=0, adiciones=0, inversiones=0;
@@ -673,10 +724,19 @@ function mostrarResultados() {
     // ── Palabra dicha de más (inserción, NO repetición consecutiva) ──
     if (item.orig === null) {
       const wn  = normalizar(item.spoken);
-      const sig = alignment[ai+1];
-      // Rectificación: dijo una palabra parecida a la SIGUIENTE de referencia y
-      // luego la dijo bien (autocorrección). Si no, es una adición.
-      if (sig && sig.orig && wn !== normalizar(sig.orig) && similitud(wn, normalizar(sig.orig)) >= 0.55) {
+      // Muletilla ("eh", "mmm"...): es vacilación, no palabra añadida.
+      if (MULETILLAS.has(wn)) {
+        vacilaciones++;
+        obsDetalle.push({word: limpiar(item.spoken), tipo: "vacilacion", motivo: "muletilla"});
+        return;
+      }
+      const sig  = alignment[ai+1];
+      const sigN = sig && sig.orig ? normalizar(sig.orig) : "";
+      // Rectificación / falso comienzo: dijo algo parecido (o un trozo inicial,
+      // "ma- mariposa") de la SIGUIENTE palabra y luego la leyó bien.
+      const falsoComienzo = sigN && wn.length >= 2 && wn !== sigN && sigN.startsWith(wn);
+      const parecida      = sigN && wn !== sigN && similitud(fonetica(item.spoken), fonetica(sig.orig)) >= 0.55;
+      if (falsoComienzo || parecida) {
         rectificaciones++;
       } else {
         adiciones++;
@@ -696,7 +756,6 @@ function mostrarResultados() {
 
     // ── Coincide foneticamente o sustituye ──
     const w       = spoken[item.spokenIdx];
-    const acc     = w?.PronunciationAssessment?.AccuracyScore ?? 100;
     const origN   = normalizar(item.orig);
     const spokenN = normalizar(item.spoken);
     const exacta  = (origN === spokenN) || (fonetica(item.orig) === fonetica(item.spoken));
@@ -704,10 +763,15 @@ function mostrarResultados() {
     if (exacta) {
       // Palabra leída correctamente (cuenta para precisión aunque se repita)
       correctas++;
-      const esRepetida    = w && w._repetida;
-      const haySilabeo    = w && detectarSilabeo(w);
-      const hayPausaAntes = pausaAntes.has(item.spokenIdx);
-      const dudosa        = acc < 60;
+      const esRepetida = w && w._repetida;
+      const haySilabeo = w && detectarSilabeo(w, baseCharDur);
+      // Pausa: solo cuenta como vacilación si NO viene tras un signo de
+      // puntuación (pausar en el punto/coma es prosodia CORRECTA, no duda).
+      const gap            = gapAntes.get(item.spokenIdx) || 0;
+      const trasPuntuacion = item.origIdx > 0 && /[.,;:!?…»)]$/.test(palabras[item.origIdx - 1]);
+      const hayPausaAntes  = gap > (trasPuntuacion ? 20000000 : 7000000);  // 2s vs 0.7s
+      const hayBreak       = !trasPuntuacion && unexpectedBreak(w);
+      if (hayPausaAntes) pausasLargas++;
 
       if (esRepetida) {
         repeticiones++;
@@ -718,10 +782,10 @@ function mostrarResultados() {
         silabeo++;
         if (span) { span.className = "word silabeo"; span.dataset.tip = "Silabeo · leída sílaba a sílaba"; }
         obsDetalle.push({word: limpiar(item.orig), tipo: "silabeo"});
-      } else if (dudosa || hayPausaAntes) {
+      } else if (hayPausaAntes || hayBreak) {
         vacilaciones++;
-        const motivo = hayPausaAntes ? "pausa" : "dudosa";
-        if (span) { span.className = "word vacilacion"; span.dataset.tip = hayPausaAntes ? "Vacilación · pausa antes de leerla" : "Vacilación · leída con duda"; }
+        const motivo = hayPausaAntes ? "pausa" : "corte";
+        if (span) { span.className = "word vacilacion"; span.dataset.tip = hayPausaAntes ? "Vacilación · pausa antes de leerla" : "Vacilación · corte inesperado al leerla"; }
         obsDetalle.push({word: limpiar(item.orig), tipo: "vacilacion", motivo});
       } else {
         if (span) span.className = "word done";
@@ -740,7 +804,16 @@ function mostrarResultados() {
   // 6. Métricas globales
   const leidas    = correctas + sustituciones + inversiones;
   const totalRef  = correctas + sustituciones + inversiones + omisiones;
-  const ppm       = segundos > 0 ? Math.round(leidas / segundos * 60) : 0;
+  // PPM sobre el tiempo de habla real (primer offset → fin de la última
+  // palabra), no sobre el reloj de pared: no penaliza tardar en empezar
+  // ni el retardo al pulsar "terminar".
+  let segLectura = segundos;
+  if (spoken.length > 0) {
+    const fin = spoken[spoken.length - 1];
+    const habla = ((fin.Offset||0) + (fin.Duration||0) - (spoken[0].Offset||0)) / 10000000;
+    if (habla > 1) segLectura = habla;
+  }
+  const ppm       = segLectura > 0 ? Math.round(leidas / segLectura * 60) : 0;
   const precision = totalRef > 0 ? Math.round(correctas / totalRef * 100) : 0;
   const fluency   = fluencyCount > 0 ? Math.round(fluencyTotal / fluencyCount) : precision;
   const prosody   = prosodyCount > 0 ? Math.round(prosodyTotal / prosodyCount) : 0;
