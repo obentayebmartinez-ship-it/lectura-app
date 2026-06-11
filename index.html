@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LectorIA v3.0</title>
+<title>LectorIA v3.1</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://aka.ms/csspeech/jsbrowserpackageraw"></script>
 <style>
@@ -78,6 +78,7 @@ body { font-family: system-ui, sans-serif; background: #f5f5f0; min-height: 100v
 .word.inversion { background: #E0EFFA; color: #0C447C; }
 .word.silabeo { background: #EAF7E1; color: #2C5016; text-decoration: underline dotted; }
 .word.vacilacion { color: #92600A; text-decoration: underline wavy #E0A845; text-underline-offset: 2px; }
+.word.rectificacion { background: #FDF3E7; color: #9A6A1F; cursor: help; position: relative; }
 .prog-wrap { background: #f3f4f6; border-radius: 6px; height: 6px; margin-bottom: 4px; overflow: hidden; }
 .prog-fill { height: 100%; border-radius: 6px; background: #1D9E75; transition: width 0.3s; }
 .prog-wrap.listening .prog-fill { width: 100% !important; animation: progPulse 1.4s ease-in-out infinite; }
@@ -154,6 +155,7 @@ body { font-family: system-ui, sans-serif; background: #f5f5f0; min-height: 100v
       <div class="ley-item"><div class="ley-dot" style="background:#EF9F27"></div>Sustitución</div>
       <div class="ley-item"><div class="ley-dot" style="background:#7FB5E6"></div>Inversión</div>
       <div class="ley-item"><div class="ley-dot" style="background:#AFA9EC"></div>Repetición</div>
+      <div class="ley-item"><div class="ley-dot" style="background:#E8C083"></div>Rectificación</div>
       <div class="ley-item"><div class="ley-dot" style="background:#E0A845"></div>Vacilación</div>
     </div>
     <div class="reading" id="texto"></div>
@@ -215,7 +217,7 @@ body { font-family: system-ui, sans-serif; background: #f5f5f0; min-height: 100v
 </div>
 
 <script>
-console.log("LectorIA · motor de análisis v3.0");
+console.log("LectorIA · motor de análisis v3.1");
 // ─── Supabase ────────────────────────────────────────────────────────────────
 const SUPABASE_URL = "https://mvwuyxrlkyikfgxzokxv.supabase.co";
 const SUPABASE_KEY = "sb_publishable_SNSZe5l2R3jcxiHxcxEqgg_XBrW-Xvi";
@@ -662,9 +664,33 @@ function mostrarResultados() {
       if (!igual) continue;
       // ¿La "copia" empieza antes de que termine el original? → artefacto
       const solape = (a[0].Offset||0) < FIN(b[b.length - 1]) - 500000;
+      const lastB = b[b.length - 1], lastA = a[a.length - 1];
       if (!solape) {
-        b.forEach(w => { w._repetida = (w._repetida || 1) + 1; });
+        if (n === 1) {
+          const kept = b[0], cop = a[0];
+          const accK = kept.PronunciationAssessment?.AccuracyScore ?? 100;
+          const accC = cop.PronunciationAssessment?.AccuracyScore ?? 100;
+          const etK  = kept.PronunciationAssessment?.ErrorType;
+          // RECTIFICACIÓN: primer intento erróneo, segundo limpio
+          // (p.ej. "importante" mal leída acc=34 e inmediatamente bien acc=100)
+          if ((accK < 45 || etK === "Mispronunciation") && accC >= 70) {
+            kept._rectificada = true;
+          } else {
+            kept._repetida = (kept._repetida || 1) + 1;
+          }
+          // La palabra queda representada por su MEJOR intento
+          if (accC > accK && kept.PronunciationAssessment && cop.PronunciationAssessment) {
+            kept.PronunciationAssessment.AccuracyScore = accC;
+            kept.PronunciationAssessment.ErrorType    = cop.PronunciationAssessment.ErrorType;
+          }
+        } else {
+          b.forEach(w => { w._repetida = (w._repetida || 1) + 1; });
+        }
       }
+      // Extender la duración del último conservado hasta el final de la copia:
+      // si no, el hueco del duplicado eliminado aparece como PAUSA FANTASMA
+      // y dispara vacilaciones falsas en la palabra siguiente.
+      lastB.Duration = Math.max(lastB.Duration || 0, (lastA.Offset||0) + (lastA.Duration||0) - (lastB.Offset||0));
       spoken.length -= n;   // en ambos casos se descarta la copia
       break;
     }
@@ -759,9 +785,23 @@ function mostrarResultados() {
     const exacta  = (origN === spokenN) || (fonetica(item.orig) === fonetica(item.spoken));
 
     if (exacta) {
+      // LECTURA ERRÓNEA recuperada: el reconocedor "autocorrige" lo mal leído
+      // hacia la palabra del texto, pero lo delata con ErrorType
+      // "Mispronunciation" y AccuracyScore muy bajo (las palabras bien leídas
+      // puntúan 70-100; las falladas, 1-49). Cuenta como sustitución.
+      const accW = w?.PronunciationAssessment?.AccuracyScore ?? 100;
+      const etW  = w?.PronunciationAssessment?.ErrorType;
+      if (etW === "Mispronunciation" && accW < 50 &&
+          !PALABRAS_FUNCIONALES.has(origN) && fonetica(item.orig).length >= 4) {
+        sustituciones++;
+        if (span) { span.className = "word sustitucion"; span.dataset.tip = "Lectura errónea · la pronunció mal (precisión " + accW + "/100)"; }
+        errDetalle.push({word: limpiar(item.orig), tipo: "sustitucion", dicho: "mal pronunciada"});
+        return;
+      }
       // Palabra leída correctamente (cuenta para precisión aunque se repita)
       correctas++;
-      const esRepetida = w && w._repetida;
+      const esRectificada = w && w._rectificada;
+      const esRepetida    = w && w._repetida;
       // Pausa: solo cuenta como vacilación si NO viene tras un signo de
       // puntuación (pausar en el punto/coma es prosodia CORRECTA, no duda),
       // y el umbral se adapta al ritmo del propio alumno.
@@ -770,7 +810,11 @@ function mostrarResultados() {
       const hayPausaAntes  = gap > (trasPuntuacion ? umbralPausaPunt : umbralPausa);
       if (hayPausaAntes) pausasLargas++;
 
-      if (esRepetida) {
+      if (esRectificada) {
+        rectificaciones++;
+        if (span) { span.className = "word rectificacion"; span.dataset.tip = "Rectificación · la leyó mal y se corrigió al instante"; }
+        obsDetalle.push({word: limpiar(item.orig), tipo: "rectificacion"});
+      } else if (esRepetida) {
         repeticiones++;
         const veces = w._repetida;
         if (span) { span.className = "word repeticion"; span.dataset.tip = "Repetición · la dijo " + veces + " veces"; }
@@ -849,6 +893,7 @@ function mostrarResultados() {
         e.tipo === "inversion"   ? '<span class="tag tag-inversion">Inversión</span>' :
         e.tipo === "sustitucion" ? '<span class="tag tag-sustitucion">Sustitución</span>' :
         e.tipo === "vacilacion"  ? '<span class="tag tag-vacilacion">Vacilación</span>' :
+        e.tipo === "rectificacion" ? '<span class="tag tag-vacilacion">Rectificación</span>' :
         e.tipo === "silabeo"     ? '<span class="tag tag-silabeo">Silabeo</span>' :
         e.tipo === "repeticion"  ? '<span class="tag tag-repeticion">Repetición</span>' : '';
       const extra = (e.dicho && e.tipo !== "omision")
@@ -873,7 +918,7 @@ function mostrarResultados() {
   // 9. Diagnóstico descargable: datos crudos de Azure + alineamiento, para
   // poder afinar la herramienta contra lecturas reales con errores conocidos.
   window.__lectoria_diag = {
-    version: "motor v3.0",
+    version: "motor v3.1",
     fecha: new Date().toISOString(),
     texto_id: lecturaActual.id,
     segundos_pared: segundos,
