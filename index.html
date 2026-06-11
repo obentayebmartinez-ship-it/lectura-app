@@ -217,6 +217,7 @@ body { font-family: system-ui, sans-serif; background: #f5f5f0; min-height: 100v
 </div>
 
 <script>
+console.log("LectorIA · motor de análisis v2.1");
 // ─── Supabase ────────────────────────────────────────────────────────────────
 const SUPABASE_URL = "https://mvwuyxrlkyikfgxzokxv.supabase.co";
 const SUPABASE_KEY = "sb_publishable_SNSZe5l2R3jcxiHxcxEqgg_XBrW-Xvi";
@@ -627,18 +628,15 @@ function detectarSilabeo(w, baseCharDur) {
   return (durSeg / chars) > umbral;
 }
 
-// ─── Corte prosódico inesperado según Azure (señal extra de vacilación) ──────
-function unexpectedBreak(w) {
-  const br = w?.Feedback?.Prosody?.Break;
-  if (!br) return false;
-  const et = br.ErrorTypes || br.errorTypes;
-  if (!Array.isArray(et) || !et.includes("UnexpectedBreak")) return false;
-  const conf = br.UnexpectedBreak?.Confidence;
-  return conf === undefined || conf >= 0.75;
-}
-
 // ─── Muletillas habladas que NO deben contarse como adición ──────────────────
 const MULETILLAS = new Set(["eh","ehh","em","emm","mm","mmm","um","uhm","ah","aah"]);
+
+// ─── Palabras funcionales que el ASR pierde a menudo AUNQUE se digan ─────────
+// Contar su "omisión" como error genera falsos positivos sistemáticos.
+// Se señalan con tooltip pero no puntúan.
+const PALABRAS_FUNCIONALES = new Set(["el","la","los","las","un","una","unos","unas",
+  "y","e","o","u","a","en","de","del","al","que","se","su","sus","con","por",
+  "mi","me","te","le","lo","es","ni"]);
 
 // ─── PARAR ───────────────────────────────────────────────────────────────────
 function parar() {
@@ -670,9 +668,13 @@ function mostrarResultados() {
   // 1. Ordenar palabras dichas por tiempo
   const spokenRaw = allWords.filter(w => w.Word).sort((a,b) => (a.Offset||0)-(b.Offset||0));
 
-  // 1b. Colapsar REPETICIONES por n-gramas (1 a 3 palabras).
-  // Cubre "casa casa" Y regresiones de frase: "el perro... el perro ladra".
-  // Se conserva una sola copia para alinear y se marca _repetida.
+  // 1b. Colapsar REPETICIONES por n-gramas (1 a 3 palabras) CON conciencia
+  // temporal. Azure a veces emite duplicada la última palabra de un segmento
+  // al inicio del siguiente (artefacto de límite de segmento). Un duplicado
+  // artefacto se SOLAPA en el tiempo con el original; una repetición real del
+  // alumno nunca puede solaparse consigo misma. Los artefactos se descartan
+  // en silencio; solo las repeticiones reales marcan _repetida.
+  const FIN = w => (w.Offset||0) + (w.Duration||0);
   const spoken = [];
   for (const cur of spokenRaw) {
     spoken.push(cur);
@@ -683,11 +685,14 @@ function mostrarResultados() {
         const f = fonetica(w.Word);
         return f !== "" && f === fonetica(b[k].Word);
       });
-      if (igual) {
+      if (!igual) continue;
+      // ¿La "copia" empieza antes de que termine el original? → artefacto
+      const solape = (a[0].Offset||0) < FIN(b[b.length - 1]) - 500000;
+      if (!solape) {
         b.forEach(w => { w._repetida = (w._repetida || 1) + 1; });
-        spoken.length -= n;   // descartar la copia repetida
-        break;
       }
+      spoken.length -= n;   // en ambos casos se descarta la copia
+      break;
     }
   }
   const spokenTexts = spoken.map(w => w.Word);
@@ -748,6 +753,12 @@ function mostrarResultados() {
 
     // ── Omisión ──
     if (item.spoken === null) {
+      // Palabra funcional corta: el reconocedor se las traga con frecuencia
+      // aunque el alumno las diga → señalar sin contabilizar.
+      if (PALABRAS_FUNCIONALES.has(normalizar(item.orig))) {
+        if (span) { span.className = "word"; span.dataset.tip = "Posible omisión · palabra corta que el reconocedor pierde a menudo (no contabilizada)"; }
+        return;
+      }
       if (span) { span.className = "word omision"; span.dataset.tip = "Omisión · no leyó esta palabra"; }
       omisiones++;
       errDetalle.push({word: limpiar(item.orig), tipo: "omision"});
@@ -770,7 +781,6 @@ function mostrarResultados() {
       const gap            = gapAntes.get(item.spokenIdx) || 0;
       const trasPuntuacion = item.origIdx > 0 && /[.,;:!?…»)]$/.test(palabras[item.origIdx - 1]);
       const hayPausaAntes  = gap > (trasPuntuacion ? 20000000 : 7000000);  // 2s vs 0.7s
-      const hayBreak       = !trasPuntuacion && unexpectedBreak(w);
       if (hayPausaAntes) pausasLargas++;
 
       if (esRepetida) {
@@ -782,11 +792,10 @@ function mostrarResultados() {
         silabeo++;
         if (span) { span.className = "word silabeo"; span.dataset.tip = "Silabeo · leída sílaba a sílaba"; }
         obsDetalle.push({word: limpiar(item.orig), tipo: "silabeo"});
-      } else if (hayPausaAntes || hayBreak) {
+      } else if (hayPausaAntes) {
         vacilaciones++;
-        const motivo = hayPausaAntes ? "pausa" : "corte";
-        if (span) { span.className = "word vacilacion"; span.dataset.tip = hayPausaAntes ? "Vacilación · pausa antes de leerla" : "Vacilación · corte inesperado al leerla"; }
-        obsDetalle.push({word: limpiar(item.orig), tipo: "vacilacion", motivo});
+        if (span) { span.className = "word vacilacion"; span.dataset.tip = "Vacilación · pausa de " + (gap/10000000).toFixed(1) + "s antes de leerla"; }
+        obsDetalle.push({word: limpiar(item.orig), tipo: "vacilacion", motivo: "pausa"});
       } else {
         if (span) span.className = "word done";
       }
@@ -877,6 +886,37 @@ function mostrarResultados() {
 
   guardarSesion({ ppm, precision, fluency, prosody, omisiones, sustituciones, adiciones,
                   inversiones, repeticiones, rectificaciones, vacilaciones, silabeo, pausasLargas });
+
+  // 9. Diagnóstico descargable: datos crudos de Azure + alineamiento, para
+  // poder afinar la herramienta contra lecturas reales con errores conocidos.
+  window.__lectoria_diag = {
+    version: "motor v2.1",
+    fecha: new Date().toISOString(),
+    texto_id: lecturaActual.id,
+    segundos_pared: segundos,
+    segundos_habla: Math.round(segLectura),
+    spokenRaw: spokenRaw.map(w => ({ w: w.Word, off: w.Offset, dur: w.Duration,
+      acc: w.PronunciationAssessment?.AccuracyScore,
+      et:  w.PronunciationAssessment?.ErrorType })),
+    alineamiento: alignment.map(x => ({ ref: x.orig, dicho: x.spoken })),
+    metricas: { ppm, precision, omisiones, sustituciones, adiciones, inversiones,
+                repeticiones, rectificaciones, vacilaciones, silabeo, pausasLargas }
+  };
+  let dbgBtn = document.getElementById("dbg-btn");
+  if (!dbgBtn) {
+    dbgBtn = document.createElement("button");
+    dbgBtn.id = "dbg-btn";
+    dbgBtn.textContent = "⬇ Descargar diagnóstico de la sesión";
+    dbgBtn.style.cssText = "margin-top:10px;width:100%;padding:8px;border-radius:8px;border:0.5px solid #d1d5db;background:#fff;color:#6b7280;font-size:12px;cursor:pointer";
+    dbgBtn.onclick = () => {
+      const blob = new Blob([JSON.stringify(window.__lectoria_diag, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "diagnostico_" + (lecturaActual.id || "sesion") + "_" + Date.now() + ".json";
+      a.click();
+    };
+    document.getElementById("result").appendChild(dbgBtn);
+  }
 }
 
 // Limpia signos de puntuación de una palabra
