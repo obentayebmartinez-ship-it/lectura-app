@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>LectorIA — Historial</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
@@ -104,11 +105,9 @@
 </div>
 
 <script>
-const SUPABASE_URL = "https://mvwuyxrlkyikfgxzokxv.supabase.co";
-const SUPABASE_KEY = "sb_publishable_SNSZe5l2R3jcxiHxcxEqgg_XBrW-Xvi";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const OBJETIVOS = { "1P": 65, "2P": 90, "3P": 105, "4P": 115, "5P": 125, "6P": 135 };
+const OBJETIVOS = OBJETIVOS_PPM;
 const TEXTOS = {
   "1p-01": "Los animales domésticos", "1p-02": "Mi familia", "1p-03": "Las frutas",
   "1p-04": "El sol y la luna", "1p-05": "Los colores", "1p-06": "El cuerpo humano",
@@ -127,21 +126,30 @@ const TEXTOS = {
 };
 
 const params = new URLSearchParams(window.location.search);
-const alumnoNombre = params.get("alumno") || "";
-const alumnoCurso = params.get("curso") || "2P";
+const alumnoIdParam = params.get("id") || "";
+let alumnoNombre = params.get("alumno") || "";
+let alumnoCurso = params.get("curso") || "2P";
 let todasLasSesiones = [];
 
 async function init() {
   const { data } = await sb.auth.getSession();
   if (!data.session) { window.location.href = "login.html"; return; }
 
+  // Preferimos el id del alumno (esquema v2); nombre/curso quedan como fallback
+  if (alumnoIdParam) {
+    const { data: al, error: eAl } = await sb.from("alumnos").select("*").eq("id", alumnoIdParam).single();
+    if (eAl || !al) { document.getElementById("alumno-hero").innerHTML = "<div class='loading'>Alumno no encontrado</div>"; return; }
+    alumnoNombre = al.nombre;
+    alumnoCurso = al.curso;
+  }
+
   const iniciales = alumnoNombre.split(" ").map(n => n[0]).filter(Boolean).join("").substring(0,2).toUpperCase();
   const objetivo = OBJETIVOS[alumnoCurso] || 90;
   document.getElementById("ppm-objetivo").textContent = objetivo;
 
-  const { data: sesiones } = await sb.from("sesiones")
-    .select("*").eq("alumno", alumnoNombre)
-    .order("fecha", { ascending: true });
+  let consulta = sb.from("sesiones").select("*").order("fecha", { ascending: true });
+  consulta = alumnoIdParam ? consulta.eq("alumno_id", alumnoIdParam) : consulta.eq("alumno_nombre", alumnoNombre);
+  const { data: sesiones } = await consulta;
 
   if (!sesiones || sesiones.length === 0) {
     document.getElementById("alumno-hero").innerHTML = `
@@ -232,14 +240,15 @@ async function init() {
   });
 
   document.getElementById("lista-sesiones").innerHTML = sesionesValidas.map((s, i) => {
-    const titulo = TEXTOS[s.texto_id] || "Lectura " + (i + 1);
+    const titulo = s.texto_titulo || TEXTOS[s.texto_id] || "Lectura " + (i + 1);
     const fecha = new Date(s.fecha).toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit" });
     const chip = s.ppm >= objetivo ? "ppm-ok" : s.ppm >= objetivo * 0.8 ? "ppm-warn" : "ppm-bad";
+    const verificada = s.estado === "verificada";
     return `
       <div class="sesion-fila">
         <div>
           <div class="sesion-titulo">L${i+1}. ${titulo}</div>
-          <div class="sesion-meta">${fecha} · ${s.precision}% precisión</div>
+          <div class="sesion-meta">${fecha} · ${s.precision}% precisión${verificada ? " · ✓ verificada" : ""}</div>
         </div>
         <div class="sesion-derecha">
           <div class="errores-mini">
@@ -248,6 +257,7 @@ async function init() {
             <span class="err-tag err-r">${s.repeticiones || 0} rep</span>
           </div>
           <span class="ppm-chip ${chip}">${s.ppm} PPM</span>
+          <button class="btn-pdf" style="margin:0" onclick="window.location.href='verificar.html?sesion=${s.id}'">${verificada ? "✓" : "✔ Revisar"}</button>
         </div>
       </div>`;
   }).join("");

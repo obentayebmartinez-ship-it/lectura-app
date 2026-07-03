@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LectorIA — Verificación</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #f5f5f0; padding: 1.5rem; }
+  .header { display: flex; align-items: center; gap: 12px; margin-bottom: 1.25rem; }
+  .back-btn { font-size: 12px; color: #6b7280; border: 0.5px solid #d1d5db; border-radius: 8px; padding: 5px 12px; background: #fff; cursor: pointer; }
+  .brand { display: flex; align-items: center; gap: 8px; }
+  .brand-dot { width: 8px; height: 8px; border-radius: 50%; background: #378ADD; }
+  .brand-name { font-size: 15px; font-weight: 500; color: #111; }
+  .modo-badge { font-size: 10px; background: #E0EFFA; color: #0C447C; padding: 2px 8px; border-radius: 20px; font-weight: 500; }
+  .layout { display: grid; grid-template-columns: 1.4fr 1fr; gap: 14px; align-items: start; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+  .card { background: #fff; border: 0.5px solid #e5e7eb; border-radius: 14px; padding: 1.25rem; margin-bottom: 14px; }
+  .card-title { font-size: 14px; font-weight: 500; color: #111; margin-bottom: 0.75rem; }
+  .sesion-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .avatar { width: 42px; height: 42px; border-radius: 50%; background: #E1F5EE; display: flex; align-items: center; justify-content: center; font-weight: 500; font-size: 13px; color: #0F6E56; flex-shrink: 0; }
+  .sesion-nombre { font-size: 15px; font-weight: 500; color: #111; }
+  .sesion-meta { font-size: 12px; color: #6b7280; margin-top: 2px; }
+  .chip { font-size: 11px; padding: 3px 10px; border-radius: 20px; font-weight: 500; background: #f3f4f6; color: #374151; }
+  audio { width: 100%; margin-top: 0.75rem; height: 36px; }
+  .leyenda { display: flex; gap: 10px; margin: 0.75rem 0; flex-wrap: wrap; }
+  .ley-item { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #6b7280; }
+  .ley-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+  .reading { font-size: 18px; line-height: 2.1; color: #111; }
+  .word { display: inline; border-radius: 3px; padding: 1px 4px; cursor: pointer; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+  .word:hover { outline: 1.5px solid #378ADD; }
+  .word.done { color: #9ca3af; }
+  .word.omision { background: #FCEBEB; color: #791F1F; }
+  .word.sustitucion { background: #FAEEDA; color: #633806; }
+  .word.repeticion { background: #EEEDFE; color: #3C3489; }
+  .word.inversion { background: #E0EFFA; color: #0C447C; }
+  .word.rectificacion { background: #FDF3E7; color: #9A6A1F; }
+  .word.vacilacion { color: #92600A; text-decoration: underline wavy #E0A845; text-underline-offset: 2px; }
+  .word.dudosa { color: #9ca3af; text-decoration: underline dotted #d1d5db; }
+  .word.adicion { background: #FBE9F1; color: #86225B; font-style: italic; border: 0.5px dashed #E29CC0; }
+  .word.editada { outline: 1.5px dashed #1D9E75; }
+  /* Menú flotante de corrección */
+  #menu { position: absolute; z-index: 100; background: #fff; border: 0.5px solid #d1d5db; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.14); padding: 10px; display: none; width: 250px; }
+  #menu.show { display: block; }
+  .menu-word { font-size: 13px; font-weight: 600; color: #111; margin-bottom: 2px; }
+  .menu-sub { font-size: 11px; color: #6b7280; margin-bottom: 8px; }
+  .menu-play { width: 100%; padding: 8px; border-radius: 8px; border: none; background: #378ADD; color: #fff; font-size: 12px; font-weight: 500; cursor: pointer; margin-bottom: 8px; }
+  .menu-play:disabled { background: #d1d5db; cursor: default; }
+  .menu-opts { display: flex; flex-wrap: wrap; gap: 5px; }
+  .opt { font-size: 11px; padding: 4px 9px; border-radius: 8px; border: 0.5px solid #e5e7eb; background: #fff; cursor: pointer; color: #374151; }
+  .opt.activa { border-color: #1D9E75; background: #E1F5EE; color: #0F6E56; font-weight: 600; }
+  /* Hoja de registro */
+  .grupo { margin-bottom: 1rem; }
+  .grupo-nombre { font-size: 11px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+  .dim-fila { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 0.5px solid #f3f4f6; }
+  .dim-fila:last-child { border-bottom: none; }
+  .dim-label { font-size: 13px; color: #111; }
+  .dim-sub { font-size: 10px; color: #9ca3af; }
+  .niveles { display: flex; gap: 4px; }
+  .nivel { width: 34px; text-align: center; font-size: 11px; padding: 5px 0; border-radius: 8px; border: 0.5px solid #e5e7eb; background: #fff; cursor: pointer; color: #6b7280; }
+  .nivel.activo-1 { border-color: #1D9E75; background: #E1F5EE; color: #0F6E56; font-weight: 600; }
+  .nivel.activo-2 { border-color: #EF9F27; background: #FAEEDA; color: #633806; font-weight: 600; }
+  .nivel.activo-3 { border-color: #E24B4A; background: #FCEBEB; color: #791F1F; font-weight: 600; }
+  .nivel.activo-pos-1 { border-color: #E24B4A; background: #FCEBEB; color: #791F1F; font-weight: 600; }
+  .nivel.activo-pos-2 { border-color: #EF9F27; background: #FAEEDA; color: #633806; font-weight: 600; }
+  .nivel.activo-pos-3 { border-color: #1D9E75; background: #E1F5EE; color: #0F6E56; font-weight: 600; }
+  .nota { font-size: 11px; color: #9ca3af; margin-top: 0.75rem; line-height: 1.5; }
+  .btn-guardar { width: 100%; padding: 13px; border-radius: 12px; border: none; background: #1D9E75; color: #fff; font-size: 14px; font-weight: 500; cursor: pointer; margin-top: 4px; }
+  .btn-guardar:disabled { background: #9ca3af; cursor: default; }
+  .guardado-ok { font-size: 12px; color: #1D9E75; text-align: center; margin-top: 8px; display: none; }
+  .guardado-ok.show { display: block; }
+  .loading { text-align: center; color: #9ca3af; font-size: 13px; padding: 2rem; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <button class="back-btn" onclick="window.location.href='panel.html'">← Panel</button>
+  <div class="brand"><div class="brand-dot"></div><span class="brand-name">LectorIA · Verificación docente</span></div>
+  <span class="modo-badge">La IA propone, tú confirmas</span>
+</div>
+
+<div id="contenido"><div class="loading">Cargando sesión...</div></div>
+
+<div id="menu">
+  <div class="menu-word" id="menu-word">—</div>
+  <div class="menu-sub" id="menu-sub">—</div>
+  <button class="menu-play" id="menu-play" onclick="reproducirSeleccion()">▶ Escuchar este momento</button>
+  <div class="menu-opts" id="menu-opts"></div>
+</div>
+
+<script>
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const params   = new URLSearchParams(window.location.search);
+const sesionId = params.get("sesion") || "";
+const DEMO     = params.get("demo") === "1";
+
+// ─── Tipos de palabra: etiqueta, clase CSS y si el docente puede asignarlos ──
+const TIPOS = {
+  correcta:       { label: "Correcta",       cls: "done",          asignable: true },
+  omision:        { label: "Omisión",        cls: "omision",       asignable: true },
+  omision_dudosa: { label: "Omisión dudosa", cls: "dudosa",        asignable: false },
+  no_leida:       { label: "No leída",       cls: "",              asignable: false },
+  sustitucion:    { label: "Sustitución",    cls: "sustitucion",   asignable: true },
+  inversion:      { label: "Inversión",      cls: "inversion",     asignable: true },
+  adicion:        { label: "Adición",        cls: "adicion",       asignable: true },
+  repeticion:     { label: "Repetición",     cls: "repeticion",    asignable: true },
+  rectificacion:  { label: "Rectificación",  cls: "rectificacion", asignable: true },
+  vacilacion:     { label: "Vacilación",     cls: "vacilacion",    asignable: true }
+};
+
+// ─── Hoja de registro: dimensiones y cálculo automático de niveles ───────────
+// positivo:true → nivel alto es BUENO (velocidad, entonación, comprensión).
+// En el resto el nivel refleja la intensidad de la dificultad observada.
+const DIMENSIONES = [
+  { grupo: "Fluidez lectora", items: [
+    { key: "silabeo",           label: "Silabeo",             manual: true,  sub: "solo observación directa" },
+    { key: "pausas_entonacion", label: "Pausas y entonación", positivo: true, sub: "prosodia (Azure)" },
+    { key: "vacilacion",        label: "Vacilación",          tipo: "vacilacion" },
+    { key: "rectificacion",     label: "Rectificación",       tipo: "rectificacion" },
+    { key: "repeticion",        label: "Repetición",          tipo: "repeticion" },
+    { key: "velocidad",         label: "Velocidad",           positivo: true, sub: "PPM vs objetivo del curso" }
+  ]},
+  { grupo: "Exactitud lectora", items: [
+    { key: "sustitucion", label: "Sustitución", tipo: "sustitucion" },
+    { key: "omisiones",   label: "Omisiones",   tipo: "omision" },
+    { key: "inversion",   label: "Inversión",   tipo: "inversion" },
+    { key: "adicion",     label: "Adición",     tipo: "adicion" },
+    { key: "rotacion",    label: "Rotación (b/d, p/q)", manual: true, sub: "error visual: solo observación directa" }
+  ]},
+  { grupo: "Comprensión y expresión", items: [
+    { key: "comprension", label: "Comprensión lectora", manual: true, positivo: true, sub: "preguntas orales tras la lectura" }
+  ]}
+];
+
+let sesion = null;
+let palabras = [];
+let niveles = {};          // {key: 1|2|3}
+let nivelesTocados = new Set();
+let seleccionada = null;
+let audioEl = null;
+let hayCambios = false;
+
+// ─── Carga ───────────────────────────────────────────────────────────────────
+async function init() {
+  if (DEMO) { cargarDemo(); render(); return; }
+  if (!sesionId) { document.getElementById("contenido").innerHTML = "<div class='loading'>Falta el parámetro de sesión</div>"; return; }
+
+  const { data } = await sb.auth.getSession();
+  if (!data.session) { window.location.href = "login.html"; return; }
+
+  const { data: s, error: eS } = await sb.from("sesiones").select("*").eq("id", sesionId).single();
+  if (eS || !s) { document.getElementById("contenido").innerHTML = "<div class='loading'>Sesión no encontrada</div>"; return; }
+  sesion = s;
+
+  const { data: pal, error: eP } = await sb.from("sesion_palabras")
+    .select("*").eq("sesion_id", sesionId).order("id", { ascending: true });
+  if (eP || !pal || pal.length === 0) {
+    document.getElementById("contenido").innerHTML = "<div class='loading'>Esta sesión no tiene detalle palabra a palabra (es anterior a la v3.2)</div>";
+    return;
+  }
+  palabras = pal;
+
+  if (sesion.audio_path) {
+    const { data: urlData } = await sb.storage.from("audios").createSignedUrl(sesion.audio_path, 3600);
+    if (urlData?.signedUrl) sesion._audioUrl = urlData.signedUrl;
+  }
+
+  render();
+}
+
+// ─── Niveles automáticos ─────────────────────────────────────────────────────
+function tipoEfectivo(p) { return p.tipo_verificado || p.tipo_ia; }
+
+function nivelPorTasa(count, totalRef) {
+  const t = totalRef > 0 ? (count / totalRef) * 100 : 0;
+  return t <= 1 ? 1 : t <= 4 ? 2 : 3;   // errores por cada 100 palabras
+}
+
+function calcularNivelesAuto() {
+  const totalRef = palabras.filter(p => p.idx >= 0 && tipoEfectivo(p) !== "no_leida").length || 1;
+  const cuenta = t => palabras.filter(p => tipoEfectivo(p) === t).length;
+  const objetivo = OBJETIVOS_PPM[sesion.curso] || 90;
+  const pctPpm = sesion.ppm ? (sesion.ppm / objetivo) * 100 : 0;
+
+  const auto = {
+    velocidad:         pctPpm >= 100 ? 3 : pctPpm >= 80 ? 2 : 1,
+    pausas_entonacion: sesion.prosody >= 75 ? 3 : sesion.prosody >= 50 ? 2 : sesion.prosody ? 1 : 2,
+    vacilacion:        nivelPorTasa(cuenta("vacilacion"), totalRef),
+    rectificacion:     nivelPorTasa(cuenta("rectificacion"), totalRef),
+    repeticion:        nivelPorTasa(cuenta("repeticion"), totalRef),
+    sustitucion:       nivelPorTasa(cuenta("sustitucion"), totalRef),
+    omisiones:         nivelPorTasa(cuenta("omision"), totalRef),
+    inversion:         nivelPorTasa(cuenta("inversion"), totalRef),
+    adicion:           nivelPorTasa(cuenta("adicion"), totalRef)
+  };
+  // No pisar lo que el docente ya tocó ni lo guardado previamente
+  Object.entries(auto).forEach(([k, v]) => { if (!nivelesTocados.has(k)) niveles[k] = v; });
+}
+
+// ─── Render ──────────────────────────────────────────────────────────────────
+function render() {
+  if (sesion.niveles && Object.keys(sesion.niveles).length > 0 && !hayCambios) {
+    niveles = { ...sesion.niveles };
+    Object.keys(niveles).forEach(k => nivelesTocados.add(k));
+  } else {
+    calcularNivelesAuto();
+  }
+
+  const ini = (sesion.alumno_nombre || "?").split(" ").map(n => n[0]).filter(Boolean).join("").substring(0,2).toUpperCase();
+  const fecha = new Date(sesion.fecha).toLocaleDateString("es-ES");
+  const errores = palabras.filter(p => !["correcta","no_leida","omision_dudosa"].includes(tipoEfectivo(p))).length;
+
+  document.getElementById("contenido").innerHTML = `
+    <div class="layout">
+      <div>
+        <div class="card">
+          <div class="sesion-head">
+            <div class="avatar">${ini}</div>
+            <div style="flex:1">
+              <div class="sesion-nombre">${sesion.alumno_nombre}</div>
+              <div class="sesion-meta">${sesion.curso} · «${sesion.texto_titulo || sesion.texto_id}» · ${fecha}</div>
+            </div>
+            <span class="chip">${sesion.ppm || "—"} PPM</span>
+            <span class="chip">${sesion.precision != null ? sesion.precision + "%" : "—"} precisión</span>
+            <span class="chip">${errores} marcas</span>
+          </div>
+          ${sesion._audioUrl
+            ? `<audio id="audio" controls src="${sesion._audioUrl}"></audio>`
+            : `<div class="nota">Sin audio grabado en esta sesión — la verificación se hace de memoria.</div>`}
+        </div>
+        <div class="card">
+          <div class="card-title">Lectura — pulsa cualquier palabra para escucharla o corregir su marca</div>
+          <div class="leyenda">
+            <div class="ley-item"><div class="ley-dot" style="background:#F09595"></div>Omisión</div>
+            <div class="ley-item"><div class="ley-dot" style="background:#EF9F27"></div>Sustitución</div>
+            <div class="ley-item"><div class="ley-dot" style="background:#7FB5E6"></div>Inversión</div>
+            <div class="ley-item"><div class="ley-dot" style="background:#AFA9EC"></div>Repetición</div>
+            <div class="ley-item"><div class="ley-dot" style="background:#E8C083"></div>Rectificación</div>
+            <div class="ley-item"><div class="ley-dot" style="background:#E0A845"></div>Vacilación</div>
+            <div class="ley-item"><div class="ley-dot" style="background:#E29CC0"></div>Adición</div>
+          </div>
+          <div class="reading" id="reading"></div>
+        </div>
+      </div>
+      <div>
+        <div class="card">
+          <div class="card-title">📋 Hoja de registro <span style="font-size:11px;font-weight:400;color:#9ca3af">1 bajo · 2 medio · 3 alto</span></div>
+          <div id="hoja"></div>
+          <div class="nota">Los niveles con datos se han calculado automáticamente y puedes corregirlos.
+          Silabeo, rotación y comprensión requieren tu observación directa.</div>
+          <button class="btn-guardar" id="btn-guardar" onclick="guardarVerificacion()" ${DEMO ? "disabled" : ""}>💾 Guardar verificación</button>
+          <div class="guardado-ok" id="guardado-ok">✓ Verificación guardada — esta sesión pasa al dataset</div>
+        </div>
+      </div>
+    </div>`;
+
+  audioEl = document.getElementById("audio");
+  renderPalabras();
+  renderHoja();
+}
+
+function renderPalabras() {
+  const cont = document.getElementById("reading");
+  cont.innerHTML = "";
+  palabras.forEach((p, i) => {
+    const t = tipoEfectivo(p);
+    const span = document.createElement("span");
+    span.className = "word " + (TIPOS[t]?.cls || "");
+    if (p.tipo_verificado && p.tipo_verificado !== p.tipo_ia) span.classList.add("editada");
+    span.textContent = (p.idx >= 0 ? p.palabra_ref : p.palabra_dicha) + " ";
+    span.onclick = ev => abrirMenu(ev, i);
+    cont.appendChild(span);
+  });
+}
+
+function renderHoja() {
+  document.getElementById("hoja").innerHTML = DIMENSIONES.map(g => `
+    <div class="grupo">
+      <div class="grupo-nombre">${g.grupo}</div>
+      ${g.items.map(d => {
+        const val = niveles[d.key] || null;
+        return `
+        <div class="dim-fila">
+          <div>
+            <div class="dim-label">${d.label}</div>
+            ${d.sub ? `<div class="dim-sub">${d.sub}</div>` : ""}
+          </div>
+          <div class="niveles">
+            ${[1,2,3].map(n => {
+              const activo = val === n ? (d.positivo ? `activo-pos-${n}` : `activo-${n}`) : "";
+              return `<button class="nivel ${activo}" onclick="setNivel('${d.key}', ${n})">${n}</button>`;
+            }).join("")}
+          </div>
+        </div>`;
+      }).join("")}
+    </div>`).join("");
+}
+
+function setNivel(key, n) {
+  niveles[key] = (niveles[key] === n) ? null : n;
+  nivelesTocados.add(key);
+  hayCambios = true;
+  renderHoja();
+}
+
+// ─── Menú de corrección por palabra ──────────────────────────────────────────
+function abrirMenu(ev, i) {
+  ev.stopPropagation();
+  seleccionada = i;
+  const p = palabras[i];
+  const t = tipoEfectivo(p);
+  const menu = document.getElementById("menu");
+
+  document.getElementById("menu-word").textContent = p.idx >= 0 ? p.palabra_ref : p.palabra_dicha;
+  const dicho = (p.palabra_dicha && p.idx >= 0 && p.palabra_dicha !== p.palabra_ref) ? ` · dijo «${p.palabra_dicha}»` : "";
+  document.getElementById("menu-sub").textContent = "IA: " + (TIPOS[p.tipo_ia]?.label || p.tipo_ia) + dicho;
+
+  const puedeEscuchar = audioEl && momentoDe(i) != null;
+  document.getElementById("menu-play").disabled = !puedeEscuchar;
+
+  document.getElementById("menu-opts").innerHTML = Object.entries(TIPOS)
+    .filter(([k, v]) => v.asignable && (k !== "adicion" || p.idx < 0))
+    .map(([k, v]) => `<button class="opt ${t === k ? "activa" : ""}" onclick="setTipo(${i}, '${k}')">${v.label}</button>`)
+    .join("");
+
+  menu.classList.add("show");
+  const r = ev.target.getBoundingClientRect();
+  menu.style.left = Math.min(r.left + window.scrollX, window.scrollX + document.documentElement.clientWidth - 270) + "px";
+  menu.style.top = (r.bottom + window.scrollY + 6) + "px";
+}
+document.addEventListener("click", () => document.getElementById("menu").classList.remove("show"));
+document.getElementById("menu").addEventListener("click", ev => ev.stopPropagation());
+
+function setTipo(i, tipo) {
+  const p = palabras[i];
+  p.tipo_verificado = tipo;
+  p._dirty = true;
+  hayCambios = true;
+  calcularNivelesAuto();
+  renderPalabras();
+  renderHoja();
+  document.getElementById("menu").classList.remove("show");
+}
+
+// ─── Escuchar el momento de una palabra ──────────────────────────────────────
+// Para omisiones (sin audio propio) se toma la palabra dicha anterior.
+function momentoDe(i) {
+  for (let k = i; k >= 0; k--) {
+    if (palabras[k].offset_ms != null) {
+      return { off: palabras[k].offset_ms, dur: palabras[k].duracion_ms || 400 };
+    }
+  }
+  return null;
+}
+
+let paradaTimer = null;
+function reproducirSeleccion() {
+  if (seleccionada == null || !audioEl) return;
+  const m = momentoDe(seleccionada);
+  if (!m) return;
+  // Margen de -0.6s: la grabación empieza un poco antes que el reconocedor
+  audioEl.currentTime = Math.max(0, (m.off - 600) / 1000);
+  audioEl.play();
+  const finEn = (m.off + m.dur + 900) / 1000;
+  clearInterval(paradaTimer);
+  paradaTimer = setInterval(() => {
+    if (audioEl.currentTime >= finEn || audioEl.paused) { audioEl.pause(); clearInterval(paradaTimer); }
+  }, 100);
+}
+
+// ─── Guardar ─────────────────────────────────────────────────────────────────
+// OJO: supabase-js no lanza excepciones, devuelve {error} — se comprueba a mano.
+async function guardarVerificacion() {
+  const btn = document.getElementById("btn-guardar");
+  btn.disabled = true; btn.textContent = "Guardando...";
+
+  let fallos = 0;
+  for (const p of palabras.filter(x => x._dirty)) {
+    const { error } = await sb.from("sesion_palabras")
+      .update({ tipo_verificado: p.tipo_verificado }).eq("id", p.id);
+    if (error) { console.error("Error guardando palabra:", error); fallos++; }
+    else p._dirty = false;
+  }
+
+  const { error: eSes } = await sb.from("sesiones")
+    .update({ niveles: niveles, estado: "verificada" }).eq("id", sesionId);
+  if (eSes) { console.error("Error guardando niveles:", eSes); fallos++; }
+
+  btn.disabled = false;
+  btn.textContent = "💾 Guardar verificación";
+  if (fallos === 0) {
+    document.getElementById("guardado-ok").classList.add("show");
+    hayCambios = false;
+  } else {
+    alert("Hubo " + fallos + " error(es) al guardar. Revisa la conexión e inténtalo de nuevo.");
+  }
+}
+
+// ─── Modo demo (?demo=1): datos ficticios para ver la pantalla sin BD ────────
+function cargarDemo() {
+  sesion = {
+    alumno_nombre: "Alumno de Prueba", curso: "2P", texto_titulo: "Las abejas",
+    fecha: new Date().toISOString(), ppm: 74, precision: 91, prosody: 62,
+    niveles: null, _audioUrl: null
+  };
+  const texto = "Las abejas son insectos que viven en colonias. Dentro de la colmena trabajan juntas para producir miel. La abeja reina pone huevos y las obreras cuidan la colmena.".split(" ");
+  const tipos = { 2: "sustitucion", 5: "vacilacion", 9: "omision", 13: "repeticion", 19: "rectificacion", 24: "inversion" };
+  palabras = texto.map((w, i) => ({
+    id: i + 1, idx: i, palabra_ref: w,
+    palabra_dicha: tipos[i] === "omision" ? null : (tipos[i] === "sustitucion" ? "abuelas" : w),
+    tipo_ia: tipos[i] || "correcta", tipo_verificado: null,
+    accuracy: tipos[i] ? 40 : 95, offset_ms: i * 600, duracion_ms: 400, gap_ms: 80
+  }));
+  palabras.splice(7, 0, { id: 900, idx: -1, palabra_ref: null, palabra_dicha: "eh", tipo_ia: "adicion", tipo_verificado: null, accuracy: null, offset_ms: 4200, duracion_ms: 200, gap_ms: null });
+}
+
+init();
+</script>
+</body>
+</html>

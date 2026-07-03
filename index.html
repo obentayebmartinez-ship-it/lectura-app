@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>LectorIA v3.1</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
 <script src="https://aka.ms/csspeech/jsbrowserpackageraw"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -33,7 +34,7 @@ body { font-family: system-ui, sans-serif; background: #f5f5f0; min-height: 100v
 .reading { font-size: 19px; line-height: 2; color: #111; overflow: visible; }
 .word { display: inline; border-radius: 3px; padding: 1px 4px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .word.done { color: #9ca3af; }
-.word.omision, .word.sustitucion, .word.inversion, .word.repeticion, .word.silabeo, .word.vacilacion { cursor: help; position: relative; }
+.word.omision, .word.sustitucion, .word.inversion, .word.repeticion, .word.vacilacion { cursor: help; position: relative; }
 
 /* ── Tooltip tipo bocadillo ── */
 .word[data-tip]:hover::after {
@@ -76,7 +77,6 @@ body { font-family: system-ui, sans-serif; background: #f5f5f0; min-height: 100v
 .word.sustitucion { background: #FAEEDA; color: #633806; }
 .word.repeticion { background: #EEEDFE; color: #3C3489; }
 .word.inversion { background: #E0EFFA; color: #0C447C; }
-.word.silabeo { background: #EAF7E1; color: #2C5016; text-decoration: underline dotted; }
 .word.vacilacion { color: #92600A; text-decoration: underline wavy #E0A845; text-underline-offset: 2px; }
 .word.rectificacion { background: #FDF3E7; color: #9A6A1F; cursor: help; position: relative; }
 .prog-wrap { background: #f3f4f6; border-radius: 6px; height: 6px; margin-bottom: 4px; overflow: hidden; }
@@ -117,7 +117,6 @@ body { font-family: system-ui, sans-serif; background: #f5f5f0; min-height: 100v
 .tag-repeticion { background: #EEEDFE; color: #3C3489; }
 .tag-inversion { background: #E0EFFA; color: #0C447C; }
 .tag-vacilacion { background: #FBF1DC; color: #92600A; }
-.tag-silabeo { background: #EAF7E1; color: #2C5016; }
 .accuracy-bar { margin-top: 0.75rem; background: #fff; border: 0.5px solid #e5e7eb; border-radius: 10px; padding: 0.75rem; }
 .accuracy-label { font-size: 11px; color: #6b7280; margin-bottom: 4px; display: flex; justify-content: space-between; }
 .accuracy-track { background: #f3f4f6; border-radius: 4px; height: 8px; overflow: hidden; }
@@ -217,18 +216,27 @@ body { font-family: system-ui, sans-serif; background: #f5f5f0; min-height: 100v
 </div>
 
 <script>
-console.log("LectorIA · motor de análisis v3.1");
-// ─── Supabase ────────────────────────────────────────────────────────────────
-const SUPABASE_URL = "https://mvwuyxrlkyikfgxzokxv.supabase.co";
-const SUPABASE_KEY = "sb_publishable_SNSZe5l2R3jcxiHxcxEqgg_XBrW-Xvi";
+console.log("LectorIA · motor de análisis v3.2");
+// ─── Supabase (URL y clave en config.js) ─────────────────────────────────────
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ─── Usuario autenticado (RLS exige sesión iniciada) ─────────────────────────
+let usuarioActual = null;
+sb.auth.getSession().then(({ data }) => {
+  if (!data.session) { window.location.href = "login.html"; return; }
+  usuarioActual = data.session.user;
+});
 
 // ─── Azure Speech (token desde servidor, la clave nunca sale del backend) ─────
 let AZURE_TOKEN  = null;
 let AZURE_REGION = "westeurope";
 
 async function obtenerToken() {
-  const res  = await fetch("/api/azure-token");
+  // El endpoint exige sesión de LectorIA: se envía el token de Supabase
+  const { data: sesionAuth } = await sb.auth.getSession();
+  const jwt = sesionAuth.session?.access_token;
+  if (!jwt) { window.location.href = "login.html"; throw new Error("Sesión caducada"); }
+  const res  = await fetch("/api/azure-token", { headers: { Authorization: "Bearer " + jwt } });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "No se pudo obtener el token de Azure");
   AZURE_TOKEN  = data.token;
@@ -342,20 +350,20 @@ const lecturas = {
 };
 
 // ─── Inicializar alumno y lectura ────────────────────────────────────────────
+// La sesión debe quedar ligada a un alumno real de la BD: se entra desde el
+// panel, que guarda el id del alumno en localStorage.
+const alumnoId       = localStorage.getItem("alumno_id")     || "";
 const alumnoGuardado = localStorage.getItem("alumno_nombre") || "";
 const cursoAlumno    = localStorage.getItem("alumno_curso")  || "2P";
 
-if (alumnoGuardado) {
+if (!alumnoId || !alumnoGuardado) {
+  window.location.href = "panel.html";
+} else {
   document.getElementById("alumno").value = alumnoGuardado;
   document.getElementById("alumno").readOnly = true;
   const ini = alumnoGuardado.split(" ").map(n => n[0]).filter(Boolean).join("").substring(0,2).toUpperCase();
-  document.getElementById("avatar").textContent = ini;
+  document.getElementById("avatar").textContent = ini || "?";
 }
-
-document.getElementById("alumno").addEventListener("input", function() {
-  const v = this.value.trim();
-  document.getElementById("avatar").textContent = v.split(" ").map(n=>n[0]).filter(Boolean).join("").substring(0,2).toUpperCase() || "?";
-});
 
 const lecturasDelCurso  = lecturas[cursoAlumno] || lecturas["2P"];
 const sesionesAlumno    = JSON.parse(localStorage.getItem("sesiones_" + alumnoGuardado) || "[]");
@@ -392,6 +400,13 @@ let fluencyTotal  = 0;
 let fluencyCount  = 0;
 let prosodyTotal  = 0;
 let prosodyCount  = 0;
+
+// Grabación completa del audio (evidencia para el docente, reanálisis futuro
+// y dataset de entrenamiento del modelo propio)
+let mediaRecorder = null;
+let audioChunks   = [];
+let micStream     = null;
+let audioListo    = null;       // Promise que resuelve al Blob grabado (o null)
 
 // ─── Toggle ──────────────────────────────────────────────────────────────────
 function toggleLectura() {
@@ -437,6 +452,19 @@ async function iniciar() {
   }, 1000);
 
   try {
+    // Arrancar la grabación de audio ANTES que el reconocedor: así los offsets
+    // de Azure caen siempre DENTRO de la grabación (con un pequeño desfase).
+    audioChunks = []; audioListo = null;
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(micStream);
+      mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+      mediaRecorder.start(1000);
+    } catch (e) {
+      console.warn("No se pudo iniciar la grabación de audio (la sesión seguirá sin audio)", e);
+      mediaRecorder = null;
+    }
+
     // Obtener token del servidor (la clave nunca sale del backend)
     await obtenerToken();
 
@@ -620,6 +648,17 @@ function parar() {
   grabando = false;
   clearInterval(timer);
 
+  // Cerrar la grabación de audio; el blob se recoge en guardarSesion
+  audioListo = new Promise(resolve => {
+    if (!mediaRecorder || mediaRecorder.state === "inactive") { resolve(null); return; }
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType || "audio/webm" });
+      if (micStream) micStream.getTracks().forEach(t => t.stop());
+      resolve(blob.size > 0 ? blob : null);
+    };
+    mediaRecorder.stop();
+  });
+
   const btn = document.getElementById("btn");
   btn.className   = "btn finished";
   btn.textContent = "⏳ Finalizando...";
@@ -729,9 +768,27 @@ function mostrarResultados() {
 
   // 4b. Clasificar
   let omisiones=0, sustituciones=0, adiciones=0, inversiones=0;
-  let repeticiones=0, rectificaciones=0, vacilaciones=0, silabeo=0, correctas=0;
+  let repeticiones=0, rectificaciones=0, vacilaciones=0, correctas=0;
   const errDetalle = [];   // errores: omisión, sustitución, inversión
-  const obsDetalle = [];   // observaciones de fluidez: vacilación, silabeo, repetición
+  const obsDetalle = [];   // observaciones de fluidez: vacilación, repetición
+
+  // Registro palabra a palabra en orden de lectura: es lo que revisa el
+  // docente en verificar.html y el dataset del futuro modelo propio.
+  const TICKS_MS = 10000;   // Azure mide en ticks de 100 ns
+  const detallePalabras = [];
+  const reg = (item, tipo, gap) => {
+    const w = item.spokenIdx >= 0 ? spoken[item.spokenIdx] : null;
+    detallePalabras.push({
+      idx:           item.origIdx,
+      palabra_ref:   item.orig || null,
+      palabra_dicha: item.spoken || null,
+      tipo_ia:       tipo,
+      accuracy:      w?.PronunciationAssessment?.AccuracyScore ?? null,
+      offset_ms:     w ? Math.round((w.Offset   || 0) / TICKS_MS) : null,
+      duracion_ms:   w ? Math.round((w.Duration || 0) / TICKS_MS) : null,
+      gap_ms:        (gap != null) ? Math.round(gap / TICKS_MS) : null
+    });
+  };
 
   alignment.forEach((item, ai) => {
     // ── Palabra dicha de más (inserción, NO repetición consecutiva) ──
@@ -741,6 +798,7 @@ function mostrarResultados() {
       if (MULETILLAS.has(wn)) {
         vacilaciones++;
         obsDetalle.push({word: limpiar(item.spoken), tipo: "vacilacion", motivo: "muletilla"});
+        reg(item, "vacilacion");
         return;
       }
       const sig  = alignment[ai+1];
@@ -751,8 +809,10 @@ function mostrarResultados() {
       const parecida      = sigN && wn !== sigN && similitud(fonetica(item.spoken), fonetica(sig.orig)) >= 0.55;
       if (falsoComienzo || parecida) {
         rectificaciones++;
+        reg(item, "rectificacion");
       } else {
         adiciones++;
+        reg(item, "adicion");
       }
       return;
     }
@@ -764,17 +824,20 @@ function mostrarResultados() {
       // Cola no leída: la sesión terminó antes de llegar aquí.
       if (ai > lastSpokenAi) {
         if (span) { span.className = "word"; span.dataset.tip = "No leída · la lectura terminó antes de esta palabra"; }
+        reg(item, "no_leida");
         return;
       }
       // Palabra funcional corta: el reconocedor se las traga con frecuencia
       // aunque el alumno las diga → señalar sin contabilizar.
       if (PALABRAS_FUNCIONALES.has(normalizar(item.orig))) {
         if (span) { span.className = "word"; span.dataset.tip = "Posible omisión · palabra corta que el reconocedor pierde a menudo (no contabilizada)"; }
+        reg(item, "omision_dudosa");
         return;
       }
       if (span) { span.className = "word omision"; span.dataset.tip = "Omisión · no leyó esta palabra"; }
       omisiones++;
       errDetalle.push({word: limpiar(item.orig), tipo: "omision"});
+      reg(item, "omision");
       return;
     }
 
@@ -796,6 +859,7 @@ function mostrarResultados() {
         sustituciones++;
         if (span) { span.className = "word sustitucion"; span.dataset.tip = "Lectura errónea · la pronunció mal (precisión " + accW + "/100)"; }
         errDetalle.push({word: limpiar(item.orig), tipo: "sustitucion", dicho: "mal pronunciada"});
+        reg(item, "sustitucion");
         return;
       }
       // Palabra leída correctamente (cuenta para precisión aunque se repita)
@@ -814,26 +878,32 @@ function mostrarResultados() {
         rectificaciones++;
         if (span) { span.className = "word rectificacion"; span.dataset.tip = "Rectificación · la leyó mal y se corrigió al instante"; }
         obsDetalle.push({word: limpiar(item.orig), tipo: "rectificacion"});
+        reg(item, "rectificacion", gap);
       } else if (esRepetida) {
         repeticiones++;
         const veces = w._repetida;
         if (span) { span.className = "word repeticion"; span.dataset.tip = "Repetición · la dijo " + veces + " veces"; }
         obsDetalle.push({word: limpiar(item.orig), tipo: "repeticion"});
+        reg(item, "repeticion", gap);
       } else if (hayPausaAntes) {
         vacilaciones++;
         if (span) { span.className = "word vacilacion"; span.dataset.tip = "Vacilación · pausa de " + (gap/10000000).toFixed(1) + "s antes de leerla"; }
         obsDetalle.push({word: limpiar(item.orig), tipo: "vacilacion", motivo: "pausa"});
+        reg(item, "vacilacion", gap);
       } else {
         if (span) span.className = "word done";
+        reg(item, "correcta", gap);
       }
     } else if (esInversion(item.orig, item.spoken)) {
       inversiones++;
       if (span) { span.className = "word inversion"; span.dataset.tip = "Inversión · dijo «" + limpiar(item.spoken) + "» (letras cambiadas)"; }
       errDetalle.push({word: limpiar(item.orig), tipo: "inversion", dicho: limpiar(item.spoken)});
+      reg(item, "inversion");
     } else {
       sustituciones++;
       if (span) { span.className = "word sustitucion"; span.dataset.tip = "Sustitución · dijo «" + limpiar(item.spoken) + "» en vez de «" + limpiar(item.orig) + "»"; }
       errDetalle.push({word: limpiar(item.orig), tipo: "sustitucion", dicho: limpiar(item.spoken)});
+      reg(item, "sustitucion");
     }
   });
 
@@ -871,7 +941,7 @@ function mostrarResultados() {
   document.getElementById("prosody-bar").style.width     = prosody + "%";
 
   const totalErr     = omisiones + sustituciones + inversiones;
-  const totalFluidez = repeticiones + vacilaciones + silabeo;
+  const totalFluidez = repeticiones + vacilaciones;
   const totalTodo    = totalErr + totalFluidez;
   const [emoji, titulo] =
     leidas === 0                       ? ["🤔", "No se detectó la lectura"] :
@@ -894,7 +964,6 @@ function mostrarResultados() {
         e.tipo === "sustitucion" ? '<span class="tag tag-sustitucion">Sustitución</span>' :
         e.tipo === "vacilacion"  ? '<span class="tag tag-vacilacion">Vacilación</span>' :
         e.tipo === "rectificacion" ? '<span class="tag tag-vacilacion">Rectificación</span>' :
-        e.tipo === "silabeo"     ? '<span class="tag tag-silabeo">Silabeo</span>' :
         e.tipo === "repeticion"  ? '<span class="tag tag-repeticion">Repetición</span>' : '';
       const extra = (e.dicho && e.tipo !== "omision")
         ? ` <span style="color:#c0c0c0">→ ${e.dicho}</span>`
@@ -913,12 +982,13 @@ function mostrarResultados() {
   resetBtn();
 
   guardarSesion({ ppm, precision, fluency, prosody, omisiones, sustituciones, adiciones,
-                  inversiones, repeticiones, rectificaciones, vacilaciones, silabeo, pausasLargas });
+                  inversiones, repeticiones, rectificaciones, vacilaciones, pausasLargas },
+                detallePalabras);
 
   // 9. Diagnóstico descargable: datos crudos de Azure + alineamiento, para
   // poder afinar la herramienta contra lecturas reales con errores conocidos.
   window.__lectoria_diag = {
-    version: "motor v3.1",
+    version: "motor v3.2",
     fecha: new Date().toISOString(),
     texto_id: lecturaActual.id,
     segundos_pared: segundos,
@@ -928,7 +998,7 @@ function mostrarResultados() {
       et:  w.PronunciationAssessment?.ErrorType })),
     alineamiento: alignment.map(x => ({ ref: x.orig, dicho: x.spoken })),
     metricas: { ppm, precision, omisiones, sustituciones, adiciones, inversiones,
-                repeticiones, rectificaciones, vacilaciones, silabeo, pausasLargas }
+                repeticiones, rectificaciones, vacilaciones, pausasLargas }
   };
   let dbgBtn = document.getElementById("dbg-btn");
   if (!dbgBtn) {
@@ -959,12 +1029,34 @@ function refWordIdxPrev(alignment, ai) {
   return 0;
 }
 
-// ─── Guardar sesión ──────────────────────────────────────────────────────────
-async function guardarSesion(m) {
-  const alumno = document.getElementById("alumno").value.trim();
+// ─── Guardar sesión (audio + métricas + detalle palabra a palabra) ───────────
+// OJO: supabase-js no lanza excepciones, devuelve {error} — se comprueba a mano.
+async function guardarSesion(m, detallePalabras) {
   try {
+    if (!usuarioActual) {
+      const { data } = await sb.auth.getSession();
+      usuarioActual = data.session?.user || null;
+      if (!usuarioActual) { console.error("Sin sesión de usuario: no se puede guardar"); return; }
+    }
+    const sesionId = crypto.randomUUID();
+
+    // 1. Subir el audio grabado (evidencia para verificar + dataset)
+    let audioPath = null;
+    const blob = audioListo ? await audioListo : null;
+    if (blob) {
+      const path = usuarioActual.id + "/" + sesionId + ".webm";
+      const { error: eAudio } = await sb.storage.from("audios")
+        .upload(path, blob, { contentType: blob.type || "audio/webm" });
+      if (eAudio) console.error("Error subiendo audio (la sesión se guarda sin él):", eAudio);
+      else audioPath = path;
+    }
+
+    // 2. Guardar la sesión ligada al alumno real
     const { error } = await sb.from("sesiones").insert({
-      alumno_nombre:     alumno,
+      id:                sesionId,
+      user_id:           usuarioActual.id,
+      alumno_id:         alumnoId,
+      alumno_nombre:     alumnoGuardado,
       texto_id:          lecturaActual.id,
       texto_titulo:      lecturaActual.titulo,
       curso:             cursoAlumno,
@@ -979,19 +1071,35 @@ async function guardarSesion(m) {
       repeticiones:      m.repeticiones,
       rectificaciones:   m.rectificaciones,
       vacilaciones:      m.vacilaciones,
-      silabeo:           m.silabeo,
       pausas_largas:     m.pausasLargas,
       duracion_segundos: segundos,
+      audio_path:        audioPath,
       fecha:             new Date().toISOString()
     });
-    if (!error) {
-      document.getElementById("guardado").classList.add("show");
-      const ses = JSON.parse(localStorage.getItem("sesiones_" + alumno) || "[]");
-      ses.push({ texto_id: lecturaActual.id });
-      localStorage.setItem("sesiones_" + alumno, JSON.stringify(ses));
-    } else {
-      console.error("Supabase error:", error);
+    if (error) { console.error("Supabase error:", error); return; }
+
+    // 3. Guardar el detalle palabra a palabra (lo que revisará el docente)
+    if (detallePalabras && detallePalabras.length > 0) {
+      const filas = detallePalabras.map(p => ({ ...p, sesion_id: sesionId, user_id: usuarioActual.id }));
+      const { error: eDet } = await sb.from("sesion_palabras").insert(filas);
+      if (eDet) console.error("Error guardando el detalle de palabras:", eDet);
     }
+
+    document.getElementById("guardado").classList.add("show");
+    const ses = JSON.parse(localStorage.getItem("sesiones_" + alumnoGuardado) || "[]");
+    ses.push({ texto_id: lecturaActual.id });
+    localStorage.setItem("sesiones_" + alumnoGuardado, JSON.stringify(ses));
+
+    // 4. Botón para pasar a la verificación docente
+    let vBtn = document.getElementById("verificar-btn");
+    if (!vBtn) {
+      vBtn = document.createElement("button");
+      vBtn.id = "verificar-btn";
+      vBtn.style.cssText = "margin-top:10px;width:100%;padding:12px;border-radius:10px;border:none;background:#378ADD;color:#fff;font-size:14px;font-weight:500;cursor:pointer";
+      document.getElementById("result").appendChild(vBtn);
+    }
+    vBtn.textContent = "✔ Verificar sesión (hoja de registro)";
+    vBtn.onclick = () => window.location.href = "verificar.html?sesion=" + sesionId;
   } catch (e) {
     console.error("Error guardando sesión:", e);
   }

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>LectorIA — Panel</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
@@ -117,8 +118,6 @@
 </div>
 
 <script>
-const SUPABASE_URL = "https://mvwuyxrlkyikfgxzokxv.supabase.co";
-const SUPABASE_KEY = "sb_publishable_SNSZe5l2R3jcxiHxcxEqgg_XBrW-Xvi";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let todosLosDatos = [];
@@ -162,12 +161,14 @@ async function cargarAlumnos() {
         <div class="alumno-meta">${a.curso}</div>
       </div>
       <div class="alumno-derecha">
-        <button class="btn-leer" onclick="irALectura('${a.nombre}', '${a.curso}')">▶ Leer</button>
+        <button class="btn-pdf" onclick="window.location.href='alumno.html?id=${a.id}'">📊 Ver</button>
+        <button class="btn-leer" onclick="irALectura('${a.id}', '${a.nombre}', '${a.curso}')">▶ Leer</button>
       </div>
     </div>`).join("");
 }
 
-function irALectura(nombre, curso) {
+function irALectura(id, nombre, curso) {
+  localStorage.setItem("alumno_id", id);
   localStorage.setItem("alumno_nombre", nombre);
   localStorage.setItem("alumno_curso", curso);
   window.location.href = "index.html";
@@ -184,7 +185,7 @@ async function cargarDatos() {
 
   const ppmMedio = Math.round(data.reduce((s, r) => s + r.ppm, 0) / data.length);
   const precMedia = Math.round(data.reduce((s, r) => s + r.precision, 0) / data.length);
-  const alumnos = [...new Set(data.map(r => r.alumno))];
+  const alumnos = [...new Set(data.map(r => r.alumno_nombre))];
   document.getElementById("ppm-medio").textContent = ppmMedio;
   document.getElementById("prec-media").textContent = precMedia + "%";
   document.getElementById("total-sesiones").textContent = data.length;
@@ -223,20 +224,23 @@ async function cargarDatos() {
   });
 
   const ultimasSesiones = {};
-  data.forEach(r => { ultimasSesiones[r.alumno] = r; });
+  data.forEach(r => { ultimasSesiones[r.alumno_nombre] = r; });
   document.getElementById("lista-alumnos").innerHTML = Object.values(ultimasSesiones).map(r => {
-    const badge = r.ppm >= 90 ? "badge-ok" : r.ppm >= 70 ? "badge-warn" : "badge-bad";
-    const texto = r.ppm >= 90 ? "En nivel" : r.ppm >= 70 ? "Cerca" : "Necesita apoyo";
+    const objetivo = OBJETIVOS_PPM[r.curso] || 90;
+    const badge = r.ppm >= objetivo ? "badge-ok" : r.ppm >= objetivo * 0.8 ? "badge-warn" : "badge-bad";
+    const texto = r.ppm >= objetivo ? "En nivel" : r.ppm >= objetivo * 0.8 ? "Cerca" : "Necesita apoyo";
+    const verificada = r.estado === "verificada";
     return `
       <div class="alumno-fila">
         <div>
-          <div class="alumno-nombre">${r.alumno}</div>
+          <div class="alumno-nombre">${r.alumno_nombre}</div>
           <div class="alumno-meta">${r.ppm} PPM · ${r.precision}% precisión</div>
         </div>
         <div class="alumno-derecha">
           <span class="badge ${badge}">${texto}</span>
-          <button class="btn-pdf" onclick="window.location.href='alumno.html?alumno=${r.alumno}&curso=2P'">📊 Ver</button>
-<button class="btn-pdf" onclick="generarPDF('${r.alumno}')">📄 PDF</button>
+          <button class="btn-pdf" onclick="window.location.href='verificar.html?sesion=${r.id}'">${verificada ? "✓ Verificada" : "✔ Verificar"}</button>
+          <button class="btn-pdf" onclick="window.location.href='alumno.html?id=${r.alumno_id}'">📊 Ver</button>
+          <button class="btn-pdf" onclick="generarPDF('${r.alumno_nombre}')">📄 PDF</button>
         </div>
       </div>`;
   }).join("");
@@ -264,7 +268,7 @@ async function cargarDatos() {
 function generarPDF(nombreAlumno) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
-  const sesiones = todosLosDatos.filter(r => r.alumno === nombreAlumno);
+  const sesiones = todosLosDatos.filter(r => r.alumno_nombre === nombreAlumno);
   const ultima = sesiones[sesiones.length - 1];
   const fecha = new Date().toLocaleDateString("es-ES");
   const objetivo = 90;

@@ -1,0 +1,9 @@
+// ─── LectorIA · configuración compartida ─────────────────────────────────────
+// Proyecto de Supabase (julio 2026). Este archivo lo cargan todas las páginas;
+// las claves solo se cambian aquí. La publishable key es pública por diseño:
+// la seguridad la aporta el RLS de la base de datos.
+const SUPABASE_URL = "https://smmnrxcpgynkrqaaogie.supabase.co";
+const SUPABASE_KEY = "sb_publishable_AaNY-lUFZOtL13_W_QQ0nw_SPp-5Nj8";
+
+// Objetivo de velocidad lectora (palabras/minuto) por curso
+const OBJETIVOS_PPM = { "1P": 65, "2P": 90, "3P": 105, "4P": 115, "5P": 125, "6P": 135 };
