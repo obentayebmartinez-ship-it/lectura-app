@@ -3,278 +3,482 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LectorIA — Admin</title>
+  <title>LectorIA — Estadísticas y baremos</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
+  <script src="informe.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: system-ui, sans-serif; background: #f5f5f0; padding: 1.5rem; }
-    .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+    body { font-family: system-ui, sans-serif; background: #f5f5f0; padding: 1.5rem; color: #111; }
+    .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 10px; }
     .brand { display: flex; align-items: center; gap: 8px; }
-    .brand-dot { width: 8px; height: 8px; border-radius: 50%; background: #E24B4A; }
-    .brand-name { font-size: 16px; font-weight: 500; color: #111; }
-    .admin-badge { font-size: 10px; background: #FCEBEB; color: #791F1F; padding: 2px 8px; border-radius: 20px; font-weight: 500; }
+    .brand-dot { width: 8px; height: 8px; border-radius: 50%; background: #378ADD; }
+    .brand-name { font-size: 16px; font-weight: 500; }
+    .admin-badge { font-size: 10px; background: #E0EFFA; color: #0C447C; padding: 2px 8px; border-radius: 20px; font-weight: 500; }
+    .topbar-right { display: flex; align-items: center; gap: 12px; }
+    .toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #374151; cursor: pointer; user-select: none; }
+    .toggle input { accent-color: #1D9E75; }
     .btn-logout { font-size: 12px; padding: 6px 14px; border-radius: 8px; border: 0.5px solid #e5e7eb; background: #fff; color: #374151; cursor: pointer; }
-    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 1.5rem; }
-    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 1.5rem; }
-    .card { background: #fff; border: 0.5px solid #e5e7eb; border-radius: 14px; padding: 1.25rem; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 1.25rem; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 1.25rem; }
+    .card { background: #fff; border: 0.5px solid #e5e7eb; border-radius: 14px; padding: 1.25rem; margin-bottom: 1.25rem; }
+    .grid-2 .card, .grid-4 .card { margin-bottom: 0; }
     .metric-label { font-size: 11px; color: #6b7280; margin-bottom: 4px; }
-    .metric-value { font-size: 26px; font-weight: 500; color: #111; }
-    .metric-sub { font-size: 11px; color: #9ca3af; margin-top: 2px; }
+    .metric-value { font-size: 26px; font-weight: 500; }
     .metric-value.green { color: #1D9E75; }
-    .card-title { font-size: 14px; font-weight: 500; color: #111; margin-bottom: 1rem; }
-    .user-fila { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 0.5px solid #f3f4f6; font-size: 13px; }
-    .user-fila:last-child { border-bottom: none; }
-    .user-email { font-weight: 500; color: #111; font-size: 13px; }
-    .user-meta { font-size: 11px; color: #9ca3af; margin-top: 2px; }
-    .user-derecha { text-align: right; }
-    .user-sesiones { font-size: 15px; font-weight: 500; color: #111; }
-    .user-coste { font-size: 11px; color: #9ca3af; margin-top: 2px; }
+    .metric-value.blue { color: #378ADD; }
+    .metric-sub { font-size: 11px; color: #9ca3af; margin-top: 2px; }
+    .card-title { font-size: 14px; font-weight: 500; margin-bottom: 0.35rem; }
+    .card-sub { font-size: 11px; color: #9ca3af; margin-bottom: 1rem; }
+    .tabla-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    thead th { text-align: center; padding: 8px 6px; font-weight: 500; color: #6b7280; font-size: 11px; border-bottom: 0.5px solid #e5e7eb; white-space: nowrap; }
+    thead th.izq, tbody td.izq { text-align: left; }
+    tbody td { text-align: center; padding: 9px 6px; color: #374151; border-bottom: 0.5px solid #f3f4f6; white-space: nowrap; }
+    tbody tr:last-child td { border-bottom: none; }
+    .curso-tag { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+    .fuerte { font-weight: 600; color: #111; }
+    .pctil { font-size: 11px; color: #9ca3af; }
+    .pct-badge { font-size: 10px; padding: 1px 5px; border-radius: 5px; margin-left: 4px; }
+    .verif-chip { font-size: 10px; color: #0F6E56; background: #E1F5EE; padding: 1px 6px; border-radius: 10px; }
+    .poco-dato { font-size: 10px; color: #B45309; background: #FEF3C7; padding: 1px 6px; border-radius: 10px; }
+    .barra-mini { display: inline-flex; height: 8px; border-radius: 3px; overflow: hidden; width: 120px; vertical-align: middle; background: #f3f4f6; }
+    .barra-seg { height: 100%; }
+    .leyenda { display: flex; gap: 12px; flex-wrap: wrap; font-size: 11px; color: #6b7280; margin-top: 8px; }
+    .ley-item { display: flex; align-items: center; gap: 4px; }
+    .ley-dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
     .loading { text-align: center; color: #9ca3af; font-size: 13px; padding: 2rem; }
-    .password-screen { max-width: 380px; margin: 4rem auto; background: #fff; border: 0.5px solid #e5e7eb; border-radius: 16px; padding: 2rem; text-align: center; }
-    .password-title { font-size: 18px; font-weight: 500; color: #111; margin-bottom: 0.5rem; }
-    .password-sub { font-size: 13px; color: #6b7280; margin-bottom: 1.5rem; }
-    .password-input { width: 100%; padding: 10px 12px; border-radius: 10px; border: 0.5px solid #e5e7eb; font-size: 14px; outline: none; margin-bottom: 1rem; }
-    .password-input:focus { border-color: #E24B4A; }
-    .password-btn { width: 100%; padding: 12px; border-radius: 10px; border: none; background: #E24B4A; color: #fff; font-size: 14px; font-weight: 500; cursor: pointer; }
-    .password-error { font-size: 12px; color: #E24B4A; margin-top: 0.5rem; display: none; }
-    @media (max-width: 700px) { .grid-4 { grid-template-columns: 1fr 1fr; } .grid-2 { grid-template-columns: 1fr; } }
+    .nota { font-size: 11px; color: #9ca3af; margin-top: 0.75rem; line-height: 1.5; }
+    @media (max-width: 800px) { .grid-4 { grid-template-columns: 1fr 1fr; } .grid-2 { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
 
-<div id="password-screen" class="password-screen">
-  <div style="font-size:32px;margin-bottom:0.5rem;">🔐</div>
-  <div class="password-title">Panel de Administrador</div>
-  <div class="password-sub">Introduce la contraseña de administrador para continuar</div>
-  <input type="password" class="password-input" id="admin-pass" placeholder="Contraseña..." onkeydown="if(event.key==='Enter')verificarPassword()" />
-  <button class="password-btn" onclick="verificarPassword()">Entrar</button>
-  <div class="password-error" id="pass-error">Contraseña incorrecta</div>
-</div>
-
-<div id="admin-panel" style="display:none">
-  <div class="topbar">
-    <div style="display:flex;align-items:center;gap:10px;">
-      <div class="brand"><div class="brand-dot"></div><span class="brand-name">LectorIA</span></div>
-      <span class="admin-badge">Admin</span>
-    </div>
+<div class="topbar">
+  <div style="display:flex;align-items:center;gap:10px;">
+    <div class="brand"><div class="brand-dot"></div><span class="brand-name">LectorIA</span></div>
+    <span class="admin-badge">Estadísticas y baremos</span>
+  </div>
+  <div class="topbar-right">
+    <label class="toggle"><input type="checkbox" id="solo-verif" onchange="rerender()"> Solo lecturas verificadas</label>
     <button class="btn-logout" onclick="window.location.href='panel.html'">← Panel</button>
   </div>
-
-  <div class="grid-4">
-    <div class="card"><div class="metric-label">Total usuarios</div><div class="metric-value" id="total-usuarios">—</div><div class="metric-sub">registrados</div></div>
-    <div class="card"><div class="metric-label">Total sesiones</div><div class="metric-value" id="total-sesiones">—</div><div class="metric-sub">lecturas completadas</div></div>
-    <div class="card"><div class="metric-label">Gasto estimado</div><div class="metric-value green" id="gasto-total">—</div><div class="metric-sub">a 0.006$/min · ~2min/sesión</div></div>
-    <div class="card"><div class="metric-label">Sesiones hoy</div><div class="metric-value" id="sesiones-hoy">—</div><div class="metric-sub" id="sesiones-hoy-sub">lecturas hoy</div></div>
-  </div>
-
-  <div class="grid-2">
-    <div class="card"><div class="card-title">Uso diario — últimos 14 días</div><canvas id="chartDiario" height="200"></canvas></div>
-    <div class="card"><div class="card-title">Actividad por alumno</div><div id="lista-usuarios"><div class="loading">Cargando...</div></div></div>
-  </div>
-
-  <div class="card" style="margin-bottom:1.5rem;">
-    <div class="card-title">Detalle por usuario (docente)</div>
-    <div id="lista-detalle"><div class="loading">Cargando...</div></div>
-  </div>
-
-  <div class="card">
-    <div class="card-title">📊 Bloque estadístico global</div>
-    <div id="bloque-stats"><div class="loading">Cargando...</div></div>
-  </div>
 </div>
 
-<script>
-// NOTA: con RLS activado este panel solo muestra los datos del usuario
-// conectado; el panel global de administración queda pendiente de rehacer
-// con una función serverless (la contraseña de cliente no es seguridad real).
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-const ADMIN_PASSWORD = "lectoria2024admin";
+<div id="contenido"><div class="loading">Cargando datos...</div></div>
 
-function verificarPassword() {
-  const pass = document.getElementById("admin-pass").value;
-  if (pass === ADMIN_PASSWORD) {
-    document.getElementById("password-screen").style.display = "none";
-    document.getElementById("admin-panel").style.display = "block";
-    cargarDatos();
-  } else {
-    document.getElementById("pass-error").style.display = "block";
-  }
+<script>
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const params = new URLSearchParams(window.location.search);
+const DEMO = params.get("demo") === "1";
+
+const CURSOS = ["1P", "2P", "3P", "4P", "5P", "6P"];
+const NOMBRE_CURSO = { "1P": "1º Primaria", "2P": "2º Primaria", "3P": "3º Primaria", "4P": "4º Primaria", "5P": "5º Primaria", "6P": "6º Primaria" };
+const COLOR_CURSO = { "1P": "#1D9E75", "2P": "#378ADD", "3P": "#EF9F27", "4P": "#8B5CF6", "5P": "#EC4899", "6P": "#14B8A6" };
+const MIN_FIABLE = 8;   // por debajo de N sesiones, el baremo se marca como poco fiable
+
+let alumnos = [];
+let sesiones = [];          // todas las válidas (ppm>0), con ._curso y ._verif anotados
+let charts = [];
+
+const media = a => a.length ? a.reduce((s, v) => s + v, 0) / a.length : null;
+const r0 = v => v == null ? "—" : Math.round(v);
+const r1 = v => v == null ? "—" : (Math.round(v * 10) / 10).toFixed(1);
+
+// Percentil con interpolación lineal (método R-7, el de Excel/NumPy por defecto)
+function pctl(sortedAsc, p) {
+  if (!sortedAsc.length) return null;
+  if (sortedAsc.length === 1) return sortedAsc[0];
+  const idx = (sortedAsc.length - 1) * p;
+  const lo = Math.floor(idx), hi = Math.ceil(idx);
+  return lo === hi ? sortedAsc[lo] : sortedAsc[lo] + (sortedAsc[hi] - sortedAsc[lo]) * (idx - lo);
+}
+function resumen(valores) {
+  const a = valores.filter(v => v != null && !isNaN(v)).slice().sort((x, y) => x - y);
+  return { n: a.length, media: media(a), min: a[0] ?? null, p25: pctl(a, 0.25), p50: pctl(a, 0.5), p75: pctl(a, 0.75), max: a[a.length - 1] ?? null };
 }
 
-async function cargarDatos() {
-  const { data: sesiones } = await sb.from("sesiones").select("*").order("fecha", { ascending: true });
-  const { data: alumnos } = await sb.from("alumnos").select("*");
+async function init() {
+  if (DEMO) { const d = cargarDemo(); alumnos = d.alumnos; procesar(d.sesiones); rerender(); return; }
 
-  if (!sesiones || sesiones.length === 0) {
-    document.getElementById("lista-usuarios").innerHTML = "<div class='loading'>No hay datos todavía</div>";
-    document.getElementById("lista-detalle").innerHTML = "<div class='loading'>No hay datos todavía</div>";
-    document.getElementById("bloque-stats").innerHTML = "<div class='loading'>No hay datos todavía</div>";
+  const { data } = await sb.auth.getSession();
+  if (!data.session) { window.location.href = "login.html"; return; }
+
+  const [{ data: als }, { data: ses }] = await Promise.all([
+    sb.from("alumnos").select("*"),
+    sb.from("sesiones").select("*").order("fecha", { ascending: true })
+  ]);
+  alumnos = als || [];
+  procesar(ses || []);
+  rerender();
+}
+
+// Anota cada sesión con su curso (ficha del alumno o campo suelto) y si está verificada
+function procesar(ses) {
+  const cursoDe = {};
+  alumnos.forEach(a => { cursoDe[a.id] = a.curso; });
+  sesiones = (ses || []).filter(s => s.ppm && s.ppm > 0).map(s => ({
+    ...s,
+    _curso: cursoDe[s.alumno_id] || s.curso || "?",
+    _verif: s.estado === "verificada"
+  }));
+}
+
+function rerender() {
+  const soloV = document.getElementById("solo-verif").checked;
+  const usar = soloV ? sesiones.filter(s => s._verif) : sesiones;
+  render(usar, soloV);
+}
+
+function render(ses, soloV) {
+  charts.forEach(c => c.destroy());
+  charts = [];
+
+  if (!ses.length) {
+    document.getElementById("contenido").innerHTML =
+      `<div class="card"><div class="loading">${soloV ? "No hay lecturas verificadas todavía." : "No hay lecturas todavía."}</div></div>`;
     return;
   }
 
-  // Métricas globales
-  const hoy = new Date().toLocaleDateString("es-ES");
-  const sesionesHoy = sesiones.filter(s => new Date(s.fecha).toLocaleDateString("es-ES") === hoy);
-  const usuariosUnicos = [...new Set(alumnos ? alumnos.map(a => a.user_id) : [])];
-  document.getElementById("total-usuarios").textContent = usuariosUnicos.length || "—";
-  document.getElementById("total-sesiones").textContent = sesiones.length;
-  document.getElementById("gasto-total").textContent = "$" + (sesiones.length * 2 * 0.006).toFixed(2);
-  document.getElementById("sesiones-hoy").textContent = sesionesHoy.length;
-
-  // Gráfica uso diario
-  const dias = [], counts = [];
-  for (let i = 13; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    dias.push(d.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit" }));
-    const dateStr = d.toISOString().split("T")[0];
-    counts.push(sesiones.filter(s => s.fecha && s.fecha.startsWith(dateStr)).length);
-  }
-  new Chart(document.getElementById("chartDiario"), {
-    type: "bar",
-    data: { labels: dias, datasets: [{ data: counts, backgroundColor: "rgba(29,158,117,0.7)", borderRadius: 4 }] },
-    options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { ticks: { stepSize: 1, font: { size: 11 }, color: "#9ca3af" }, grid: { color: "rgba(0,0,0,0.04)" } }, x: { ticks: { font: { size: 10 }, color: "#9ca3af" }, grid: { display: false } } } }
-  });
-
-  // Actividad por alumno
-  const porAlumno = {};
-  sesiones.forEach(s => {
-    if (!porAlumno[s.alumno]) porAlumno[s.alumno] = { sesiones: 0, ultima: s.fecha };
-    porAlumno[s.alumno].sesiones++;
-    if (s.fecha > porAlumno[s.alumno].ultima) porAlumno[s.alumno].ultima = s.fecha;
-  });
-  const ordenados = Object.entries(porAlumno).sort((a, b) => b[1].sesiones - a[1].sesiones);
-  document.getElementById("lista-usuarios").innerHTML = ordenados.slice(0, 8).map(([nombre, d]) => {
-    const ultimaFecha = new Date(d.ultima).toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit" });
-    return `<div class="user-fila"><div><div class="user-email">${nombre}</div><div class="user-meta">Última sesión: ${ultimaFecha}</div></div><div class="user-derecha"><div class="user-sesiones">${d.sesiones} lecturas</div><div class="user-coste">~$${(d.sesiones * 2 * 0.006).toFixed(3)}</div></div></div>`;
-  }).join("");
-
-  // Detalle por docente
-  const porDocente = {};
-  if (alumnos) {
-    alumnos.forEach(a => {
-      if (!porDocente[a.user_id]) porDocente[a.user_id] = { alumnos: new Set(), sesiones: 0 };
-      porDocente[a.user_id].alumnos.add(a.nombre);
-    });
-  }
-  sesiones.forEach(s => {
-    const alumno = alumnos ? alumnos.find(a => a.nombre === s.alumno) : null;
-    const uid = alumno ? alumno.user_id : "sin-cuenta";
-    if (!porDocente[uid]) porDocente[uid] = { alumnos: new Set(), sesiones: 0 };
-    porDocente[uid].sesiones++;
-  });
-
-  document.getElementById("lista-detalle").innerHTML = `
-    <table style="width:100%;border-collapse:collapse;font-size:13px;">
-      <thead><tr style="border-bottom:0.5px solid #e5e7eb;">
-        <th style="text-align:left;padding:8px 0;font-weight:500;color:#6b7280;font-size:11px;">Usuario</th>
-        <th style="text-align:center;padding:8px 0;font-weight:500;color:#6b7280;font-size:11px;">Alumnos</th>
-        <th style="text-align:center;padding:8px 0;font-weight:500;color:#6b7280;font-size:11px;">Sesiones</th>
-        <th style="text-align:right;padding:8px 0;font-weight:500;color:#6b7280;font-size:11px;">Gasto est.</th>
-      </tr></thead>
-      <tbody>
-        ${Object.entries(porDocente).map(([uid, d]) => `
-          <tr style="border-bottom:0.5px solid #f3f4f6;">
-            <td style="padding:8px 0;color:#111;font-weight:500;">${uid.substring(0,8)}...</td>
-            <td style="text-align:center;padding:8px 0;color:#374151;">${d.alumnos.size}</td>
-            <td style="text-align:center;padding:8px 0;color:#374151;">${d.sesiones}</td>
-            <td style="text-align:right;padding:8px 0;color:#1D9E75;font-weight:500;">$${(d.sesiones * 2 * 0.006).toFixed(3)}</td>
-          </tr>`).join("")}
-        <tr style="border-top:1px solid #e5e7eb;">
-          <td style="padding:10px 0;font-weight:500;color:#111;">TOTAL</td>
-          <td style="text-align:center;padding:10px 0;font-weight:500;">${alumnos ? [...new Set(alumnos.map(a => a.nombre))].length : "—"}</td>
-          <td style="text-align:center;padding:10px 0;font-weight:500;">${sesiones.length}</td>
-          <td style="text-align:right;padding:10px 0;font-weight:500;color:#E24B4A;">$${(sesiones.length * 2 * 0.006).toFixed(3)}</td>
-        </tr>
-      </tbody>
-    </table>`;
-
-  // Estadísticas globales
-  const sesVal = sesiones.filter(s => s.ppm > 0);
-  const ppmGlobal = sesVal.length ? Math.round(sesVal.reduce((s, r) => s + r.ppm, 0) / sesVal.length) : 0;
-  const precGlobal = sesVal.length ? Math.round(sesVal.reduce((s, r) => s + r.precision, 0) / sesVal.length) : 0;
-  const omGlobal = sesiones.reduce((s, r) => s + (r.omisiones||0), 0);
-  const stGlobal = sesiones.reduce((s, r) => s + (r.sustituciones||0), 0);
-  const repGlobal = sesiones.reduce((s, r) => s + (r.repeticiones||0), 0);
-
-  // Baremos por curso
-  const cursos = ["1P", "2P", "3P", "4P", "5P", "6P"];
-  const nombresCurso = { "1P": "1º Primaria", "2P": "2º Primaria", "3P": "3º Primaria", "4P": "4º Primaria", "5P": "5º Primaria", "6P": "6º Primaria" };
-  const objetivos = { "1P": 65, "2P": 90, "3P": 105, "4P": 115, "5P": 125, "6P": 135 };
-
-  const baremosPorCurso = {};
-  cursos.forEach(curso => {
-    const alumnosCurso = alumnos ? alumnos.filter(a => a.curso === curso).map(a => a.nombre) : [];
-    const sesionesCurso = sesiones.filter(s => alumnosCurso.includes(s.alumno) && s.ppm > 0);
-    if (sesionesCurso.length > 0) {
-      baremosPorCurso[curso] = {
-        ppmMedio: Math.round(sesionesCurso.reduce((sum, s) => sum + s.ppm, 0) / sesionesCurso.length),
-        precMedio: Math.round(sesionesCurso.reduce((sum, s) => sum + s.precision, 0) / sesionesCurso.length),
-        omMedio: Math.round(sesionesCurso.reduce((sum, s) => sum + (s.omisiones||0), 0) / sesionesCurso.length),
-        stMedio: Math.round(sesionesCurso.reduce((sum, s) => sum + (s.sustituciones||0), 0) / sesionesCurso.length),
-        repMedio: Math.round(sesionesCurso.reduce((sum, s) => sum + (s.repeticiones||0), 0) / sesionesCurso.length),
-        numSesiones: sesionesCurso.length,
-        numAlumnos: alumnosCurso.length
-      };
-    }
-  });
-
-  const cursosConDatos = Object.keys(baremosPorCurso);
-
-  document.getElementById("bloque-stats").innerHTML = `
-    <div style="margin-bottom:1.25rem;">
-      <div style="font-size:13px;font-weight:500;color:#111;margin-bottom:0.75rem;">Datos globales</div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
-        <div style="background:#f9fafb;border-radius:10px;padding:12px;text-align:center;"><div style="font-size:22px;font-weight:500;color:#1D9E75;">${ppmGlobal}</div><div style="font-size:11px;color:#9ca3af;margin-top:2px;">PPM medio global</div></div>
-        <div style="background:#f9fafb;border-radius:10px;padding:12px;text-align:center;"><div style="font-size:22px;font-weight:500;color:#378ADD;">${precGlobal}%</div><div style="font-size:11px;color:#9ca3af;margin-top:2px;">Precisión media</div></div>
-        <div style="background:#f9fafb;border-radius:10px;padding:12px;text-align:center;"><div style="font-size:22px;font-weight:500;color:#111;">${sesiones.length}</div><div style="font-size:11px;color:#9ca3af;margin-top:2px;">Sesiones totales</div></div>
-        <div style="background:#FCEBEB;border-radius:10px;padding:12px;text-align:center;"><div style="font-size:22px;font-weight:500;color:#791F1F;">${omGlobal}</div><div style="font-size:11px;color:#F09595;margin-top:2px;">Omisiones totales</div></div>
-        <div style="background:#FAEEDA;border-radius:10px;padding:12px;text-align:center;"><div style="font-size:22px;font-weight:500;color:#633806;">${stGlobal}</div><div style="font-size:11px;color:#EF9F27;margin-top:2px;">Sustituciones totales</div></div>
-        <div style="background:#EEEDFE;border-radius:10px;padding:12px;text-align:center;"><div style="font-size:22px;font-weight:500;color:#3C3489;">${repGlobal}</div><div style="font-size:11px;color:#AFA9EC;margin-top:2px;">Repeticiones totales</div></div>
+  document.getElementById("contenido").innerHTML = `
+    ${bloqueKPIs(ses)}
+    <div class="card">
+      <div class="card-title">Baremo por curso — velocidad y precisión</div>
+      <div class="card-sub">Medias y percentiles de tu muestra. Un alumno en el p50 lee mejor que la mitad de las lecturas de su curso.</div>
+      <div class="tabla-wrap">${tablaBaremo(ses)}</div>
+      <div class="nota">Los percentiles (p25 · p50 · p75) describen tu propia población. El objetivo es la referencia curricular de <code>config.js</code>.</div>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">Curva de aprendizaje por curso</div>
+        <div class="card-sub">PPM medio en la 1ª, 2ª, 3ª… lectura de cada alumno. Muestra cómo mejoran con la práctica.</div>
+        <canvas id="chartCurva" height="230"></canvas>
+        <div class="leyenda" id="leyenda-curva"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Mejora media por sesión</div>
+        <div class="card-sub">Cuánto sube el PPM de media entre una lectura y la siguiente, por curso.</div>
+        <canvas id="chartMejora" height="230"></canvas>
       </div>
     </div>
-    <div style="border-top:0.5px solid #e5e7eb;padding-top:1.25rem;">
-      <div style="font-size:13px;font-weight:500;color:#111;margin-bottom:0.75rem;">Baremo por curso <span style="font-size:11px;font-weight:400;color:#9ca3af;">— basado en datos reales de la plataforma</span></div>
-      ${cursosConDatos.length === 0
-        ? `<div style="text-align:center;color:#9ca3af;font-size:13px;padding:1.5rem;">Aún no hay suficientes datos por curso. Los baremos se irán construyendo con el uso.</div>`
-        : `<table style="width:100%;border-collapse:collapse;font-size:13px;">
-            <thead><tr style="border-bottom:0.5px solid #e5e7eb;">
-              <th style="text-align:left;padding:8px 0;font-weight:500;color:#6b7280;font-size:11px;">Curso</th>
-              <th style="text-align:center;padding:8px 0;font-weight:500;color:#6b7280;font-size:11px;">Alumnos</th>
-              <th style="text-align:center;padding:8px 0;font-weight:500;color:#6b7280;font-size:11px;">Sesiones</th>
-              <th style="text-align:center;padding:8px 0;font-weight:500;color:#6b7280;font-size:11px;">PPM medio</th>
-              <th style="text-align:center;padding:8px 0;font-weight:500;color:#6b7280;font-size:11px;">Objetivo</th>
-              <th style="text-align:center;padding:8px 0;font-weight:500;color:#6b7280;font-size:11px;">Precisión</th>
-              <th style="text-align:center;padding:8px 0;font-weight:500;color:#6b7280;font-size:11px;">Om.</th>
-              <th style="text-align:center;padding:8px 0;font-weight:500;color:#6b7280;font-size:11px;">Sust.</th>
-              <th style="text-align:center;padding:8px 0;font-weight:500;color:#6b7280;font-size:11px;">Rep.</th>
-            </tr></thead>
-            <tbody>
-              ${cursosConDatos.map(curso => {
-                const d = baremosPorCurso[curso];
-                const obj = objetivos[curso];
-                const pct = Math.round((d.ppmMedio / obj) * 100);
-                const color = pct >= 100 ? "#1D9E75" : pct >= 80 ? "#EF9F27" : "#E24B4A";
-                return `<tr style="border-bottom:0.5px solid #f3f4f6;">
-                  <td style="padding:10px 0;font-weight:500;color:#111;">${nombresCurso[curso]}</td>
-                  <td style="text-align:center;padding:10px 0;color:#374151;">${d.numAlumnos}</td>
-                  <td style="text-align:center;padding:10px 0;color:#374151;">${d.numSesiones}</td>
-                  <td style="text-align:center;padding:10px 0;"><span style="font-weight:500;color:${color};">${d.ppmMedio}</span><span style="font-size:10px;color:#9ca3af;margin-left:4px;">${pct}%</span></td>
-                  <td style="text-align:center;padding:10px 0;color:#9ca3af;">${obj}</td>
-                  <td style="text-align:center;padding:10px 0;color:#374151;">${d.precMedio}%</td>
-                  <td style="text-align:center;padding:10px 0;color:#791F1F;">${d.omMedio}</td>
-                  <td style="text-align:center;padding:10px 0;color:#633806;">${d.stMedio}</td>
-                  <td style="text-align:center;padding:10px 0;color:#3C3489;">${d.repMedio}</td>
-                </tr>`;
-              }).join("")}
-            </tbody>
-          </table>`
-      }
-      <div style="font-size:11px;color:#9ca3af;margin-top:0.75rem;">💡 Con más usuarios y sesiones este baremo se convierte en un dato propio de LectorIA — único en el mercado español.</div>
+    <div class="card">
+      <div class="card-title">Baremo por curso — fluidez, prosodia y comprensión</div>
+      <div class="card-sub">Fluidez y prosodia las mide Azure (0-100). La comprensión es tu valoración 1-3 en las lecturas verificadas.</div>
+      <div class="tabla-wrap">${tablaFluidez(ses)}</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Desglose de errores por curso</div>
+      <div class="card-sub">Reparto de los 7 tipos de error sobre el total de cada curso. Revela qué falla más en cada nivel.</div>
+      <div class="tabla-wrap">${tablaErrores(ses)}</div>
+      <div class="leyenda">${InformeLectorIA.TIPOS_ERROR.map(t => `<span class="ley-item"><span class="ley-dot" style="background:${t.hex}"></span>${t.label}</span>`).join("")}</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Dificultad por texto</div>
+      <div class="card-sub">Textos ordenados por precisión media (los más difíciles primero). Útil para calibrar cada lectura.</div>
+      <div class="tabla-wrap">${tablaTextos(ses)}</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Uso diario — últimos 30 días</div>
+      <canvas id="chartUso" height="140"></canvas>
+    </div>`;
+
+  dibujarCurva(ses);
+  dibujarMejora(ses);
+  dibujarUso(ses);
+}
+
+// ─── KPIs globales ────────────────────────────────────────────────────────────
+function bloqueKPIs(ses) {
+  const alumnosConLectura = new Set(ses.map(s => s.alumno_id || s.alumno_nombre)).size;
+  const verif = ses.filter(s => s._verif).length;
+  const pctVerif = Math.round((verif / ses.length) * 100);
+  const ppmG = resumen(ses.map(s => s.ppm));
+  const precG = resumen(ses.map(s => s.precision));
+  const minutos = ses.reduce((s, r) => s + (r.duracion_segundos || 120), 0) / 60;
+  const gasto = (minutos * 0.006).toFixed(2);
+  return `
+    <div class="grid-4">
+      <div class="card">
+        <div class="metric-label">Alumnos con lecturas</div>
+        <div class="metric-value">${alumnosConLectura}</div>
+        <div class="metric-sub">de ${alumnos.length || alumnosConLectura} en la ficha</div>
+      </div>
+      <div class="card">
+        <div class="metric-label">Lecturas registradas</div>
+        <div class="metric-value">${ses.length}</div>
+        <div class="metric-sub">${verif} verificadas (${pctVerif}%)</div>
+      </div>
+      <div class="card">
+        <div class="metric-label">PPM medio global</div>
+        <div class="metric-value green">${r0(ppmG.media)}</div>
+        <div class="metric-sub">mediana ${r0(ppmG.p50)} · rango ${r0(ppmG.min)}–${r0(ppmG.max)}</div>
+      </div>
+      <div class="card">
+        <div class="metric-label">Precisión media</div>
+        <div class="metric-value blue">${r0(precG.media)}%</div>
+        <div class="metric-sub">gasto Azure estimado ~$${gasto}</div>
+      </div>
     </div>`;
 }
+
+// ─── Baremo: velocidad y precisión ────────────────────────────────────────────
+function porCurso(ses) {
+  const map = {};
+  CURSOS.forEach(c => { map[c] = []; });
+  ses.forEach(s => { if (map[s._curso]) map[s._curso].push(s); });
+  return CURSOS.filter(c => map[c].length).map(c => ({ curso: c, ses: map[c] }));
+}
+
+function celdaObj(ppmMedia, obj) {
+  const pct = Math.round((ppmMedia / obj) * 100);
+  const color = pct >= 100 ? "#1D9E75" : pct >= 80 ? "#EF9F27" : "#E24B4A";
+  const bg = pct >= 100 ? "#E1F5EE" : pct >= 80 ? "#FAEEDA" : "#FCEBEB";
+  return `<span class="pct-badge" style="color:${color};background:${bg}">${pct}%</span>`;
+}
+
+function fiabilidad(n, verif) {
+  return n < MIN_FIABLE
+    ? `<span class="poco-dato">n=${n}</span>`
+    : `<span class="verif-chip">${verif}/${n} ✓</span>`;
+}
+
+function tablaBaremo(ses) {
+  const filas = porCurso(ses).map(({ curso, ses: sc }) => {
+    const obj = OBJETIVOS_PPM[curso] || 90;
+    const ppm = resumen(sc.map(s => s.ppm));
+    const prec = resumen(sc.map(s => s.precision));
+    const nAlum = new Set(sc.map(s => s.alumno_id || s.alumno_nombre)).size;
+    const verif = sc.filter(s => s._verif).length;
+    return `<tr>
+      <td class="izq fuerte"><span class="curso-tag" style="background:${COLOR_CURSO[curso]}"></span>${NOMBRE_CURSO[curso]}</td>
+      <td>${nAlum}</td>
+      <td>${sc.length} ${fiabilidad(sc.length, verif)}</td>
+      <td class="fuerte">${r0(ppm.media)} ${celdaObj(ppm.media, obj)}</td>
+      <td class="pctil">${r0(ppm.p25)}</td>
+      <td class="fuerte">${r0(ppm.p50)}</td>
+      <td class="pctil">${r0(ppm.p75)}</td>
+      <td class="pctil">${obj}</td>
+      <td class="fuerte">${r0(prec.media)}%</td>
+      <td class="pctil">${r0(prec.p25)}–${r0(prec.p75)}%</td>
+    </tr>`;
+  }).join("");
+  return `<table>
+    <thead><tr>
+      <th class="izq">Curso</th><th>Alum.</th><th>Lecturas</th>
+      <th>PPM medio</th><th>p25</th><th>p50</th><th>p75</th><th>Objetivo</th>
+      <th>Precisión</th><th>rango p25–75</th>
+    </tr></thead>
+    <tbody>${filas}</tbody></table>`;
+}
+
+// ─── Baremo: fluidez / prosodia / comprensión ─────────────────────────────────
+function tablaFluidez(ses) {
+  const filas = porCurso(ses).map(({ curso, ses: sc }) => {
+    const flu = resumen(sc.map(s => s.fluency));
+    const pro = resumen(sc.map(s => s.prosody));
+    const dur = resumen(sc.map(s => s.duracion_segundos));
+    const comps = sc.filter(s => s._verif && s.niveles && s.niveles.comprension).map(s => s.niveles.comprension);
+    const compMedia = comps.length ? media(comps) : null;
+    const durTxt = dur.media != null ? `${Math.floor(dur.media / 60)}:${String(Math.round(dur.media % 60)).padStart(2, "0")}` : "—";
+    return `<tr>
+      <td class="izq fuerte"><span class="curso-tag" style="background:${COLOR_CURSO[curso]}"></span>${NOMBRE_CURSO[curso]}</td>
+      <td class="fuerte">${r0(flu.media)}</td><td class="pctil">${r0(flu.p25)}–${r0(flu.p75)}</td>
+      <td class="fuerte">${r0(pro.media)}</td><td class="pctil">${r0(pro.p25)}–${r0(pro.p75)}</td>
+      <td>${durTxt}</td>
+      <td class="fuerte">${compMedia != null ? r1(compMedia) + " / 3" : "—"}</td>
+      <td class="pctil">${comps.length ? comps.length + " verif." : "sin verificar"}</td>
+    </tr>`;
+  }).join("");
+  return `<table>
+    <thead><tr>
+      <th class="izq">Curso</th>
+      <th>Fluidez</th><th>rango</th>
+      <th>Prosodia</th><th>rango</th>
+      <th>Duración med.</th>
+      <th>Comprensión</th><th>base</th>
+    </tr></thead>
+    <tbody>${filas}</tbody></table>`;
+}
+
+// ─── Desglose de errores por curso ────────────────────────────────────────────
+function tablaErrores(ses) {
+  const tipos = InformeLectorIA.TIPOS_ERROR;
+  const filas = porCurso(ses).map(({ curso, ses: sc }) => {
+    const tot = tipos.map(t => sc.reduce((s, r) => s + (r[t.key] || 0), 0));
+    const suma = tot.reduce((a, b) => a + b, 0) || 1;
+    const porLectura = suma / sc.length;
+    const barra = tipos.map((t, i) => tot[i] ? `<span class="barra-seg" style="width:${(tot[i] / suma) * 100}%;background:${t.hex}"></span>` : "").join("");
+    return `<tr>
+      <td class="izq fuerte"><span class="curso-tag" style="background:${COLOR_CURSO[curso]}"></span>${NOMBRE_CURSO[curso]}</td>
+      <td>${suma}</td>
+      <td class="fuerte">${r1(porLectura)}</td>
+      <td><span class="barra-mini">${barra}</span></td>
+      <td class="izq pctil">${tipos.map((t, i) => tot[i] ? `${t.corto} ${Math.round((tot[i] / suma) * 100)}%` : "").filter(Boolean).slice(0, 3).join(" · ")}</td>
+    </tr>`;
+  }).join("");
+  return `<table>
+    <thead><tr><th class="izq">Curso</th><th>Errores</th><th>por lectura</th><th>Reparto</th><th class="izq">Predominan</th></tr></thead>
+    <tbody>${filas}</tbody></table>`;
+}
+
+// ─── Dificultad por texto ─────────────────────────────────────────────────────
+function tablaTextos(ses) {
+  const map = {};
+  ses.forEach(s => {
+    const k = s.texto_titulo || s.texto_id || "—";
+    (map[k] = map[k] || []).push(s);
+  });
+  const tipos = InformeLectorIA.TIPOS_ERROR;
+  const filas = Object.entries(map).map(([titulo, sc]) => {
+    const prec = media(sc.map(s => s.precision).filter(v => v != null));
+    const ppm = media(sc.map(s => s.ppm));
+    const err = media(sc.map(s => tipos.reduce((a, t) => a + (s[t.key] || 0), 0)));
+    const cursos = [...new Set(sc.map(s => s._curso))].join(", ");
+    return { titulo, n: sc.length, prec, ppm, err, cursos };
+  }).sort((a, b) => (a.prec ?? 999) - (b.prec ?? 999));
+
+  return `<table>
+    <thead><tr><th class="izq">Texto</th><th>Curso(s)</th><th>Lecturas</th><th>Precisión med.</th><th>PPM med.</th><th>Errores/lect.</th></tr></thead>
+    <tbody>${filas.map(f => `<tr>
+      <td class="izq fuerte">${f.titulo}</td>
+      <td class="pctil">${f.cursos}</td>
+      <td>${f.n}</td>
+      <td class="fuerte">${r0(f.prec)}%</td>
+      <td>${r0(f.ppm)}</td>
+      <td>${r1(f.err)}</td>
+    </tr>`).join("")}</tbody></table>`;
+}
+
+// ─── Gráficas ─────────────────────────────────────────────────────────────────
+function seriesPorAlumno(ses) {
+  const porAl = {};
+  ses.forEach(s => {
+    const k = s.alumno_id || s.alumno_nombre;
+    (porAl[k] = porAl[k] || { curso: s._curso, ppms: [] }).ppms.push({ f: s.fecha, ppm: s.ppm });
+  });
+  Object.values(porAl).forEach(a => a.ppms.sort((x, y) => new Date(x.f) - new Date(y.f)));
+  return porAl;
+}
+
+function dibujarCurva(ses) {
+  const porAl = seriesPorAlumno(ses);
+  const maxLect = Math.min(12, Math.max(...Object.values(porAl).map(a => a.ppms.length)));
+  const cursosPresentes = CURSOS.filter(c => Object.values(porAl).some(a => a.curso === c));
+
+  const datasets = cursosPresentes.map(curso => {
+    const puntos = [];
+    for (let i = 0; i < maxLect; i++) {
+      const vals = Object.values(porAl).filter(a => a.curso === curso && a.ppms[i]).map(a => a.ppms[i].ppm);
+      puntos.push(vals.length ? Math.round(media(vals)) : null);
+    }
+    return { label: NOMBRE_CURSO[curso], data: puntos, borderColor: COLOR_CURSO[curso], backgroundColor: COLOR_CURSO[curso], borderWidth: 2, pointRadius: 3, tension: 0.3, spanGaps: true };
+  });
+
+  const ctx = document.getElementById("chartCurva");
+  charts.push(new Chart(ctx, {
+    type: "line",
+    data: { labels: Array.from({ length: maxLect }, (_, i) => (i + 1) + "ª"), datasets },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: it => ` ${it.dataset.label}: ${it.parsed.y} PPM` } } },
+      scales: {
+        y: { title: { display: true, text: "PPM medio", font: { size: 10 }, color: "#9ca3af" }, ticks: { font: { size: 11 }, color: "#9ca3af" }, grid: { color: "rgba(0,0,0,0.04)" } },
+        x: { title: { display: true, text: "nº de lectura del alumno", font: { size: 10 }, color: "#9ca3af" }, ticks: { font: { size: 11 }, color: "#9ca3af" }, grid: { display: false } }
+      }
+    }
+  }));
+  document.getElementById("leyenda-curva").innerHTML = cursosPresentes.map(c =>
+    `<span class="ley-item"><span class="ley-dot" style="background:${COLOR_CURSO[c]}"></span>${NOMBRE_CURSO[c]}</span>`).join("");
+}
+
+function dibujarMejora(ses) {
+  const porAl = seriesPorAlumno(ses);
+  const cursosPresentes = CURSOS.filter(c => Object.values(porAl).some(a => a.curso === c && a.ppms.length >= 2));
+  const valores = cursosPresentes.map(curso => {
+    const mejoras = Object.values(porAl).filter(a => a.curso === curso && a.ppms.length >= 2)
+      .map(a => (a.ppms[a.ppms.length - 1].ppm - a.ppms[0].ppm) / (a.ppms.length - 1));
+    return media(mejoras);
+  });
+  const ctx = document.getElementById("chartMejora");
+  charts.push(new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: cursosPresentes.map(c => NOMBRE_CURSO[c]),
+      datasets: [{ data: valores.map(v => Math.round(v * 10) / 10), backgroundColor: cursosPresentes.map(c => COLOR_CURSO[c]), borderRadius: 4 }]
+    },
+    options: {
+      responsive: true, indexAxis: "y",
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: it => ` ${it.parsed.x > 0 ? "+" : ""}${it.parsed.x} PPM por lectura` } } },
+      scales: {
+        x: { title: { display: true, text: "Δ PPM por sesión", font: { size: 10 }, color: "#9ca3af" }, ticks: { font: { size: 11 }, color: "#9ca3af" }, grid: { color: "rgba(0,0,0,0.04)" } },
+        y: { ticks: { font: { size: 11 }, color: "#9ca3af" }, grid: { display: false } }
+      }
+    }
+  }));
+}
+
+function dibujarUso(ses) {
+  const dias = [], counts = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - i);
+    dias.push(d.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit" }));
+    const s = d.getTime(), e = s + 86400000;
+    counts.push(ses.filter(x => { const t = new Date(x.fecha).getTime(); return t >= s && t < e; }).length);
+  }
+  const ctx = document.getElementById("chartUso");
+  charts.push(new Chart(ctx, {
+    type: "bar",
+    data: { labels: dias, datasets: [{ data: counts, backgroundColor: "rgba(55,138,221,0.7)", borderRadius: 3 }] },
+    options: {
+      responsive: true, plugins: { legend: { display: false } },
+      scales: {
+        y: { ticks: { stepSize: 1, font: { size: 11 }, color: "#9ca3af" }, grid: { color: "rgba(0,0,0,0.04)" } },
+        x: { ticks: { font: { size: 9 }, color: "#9ca3af", maxTicksLimit: 15 }, grid: { display: false } }
+      }
+    }
+  }));
+}
+
+// ─── Demo (?demo=1): varios cursos y alumnos sintéticos ───────────────────────
+function cargarDemo() {
+  const als = [], ses = [];
+  const dia = 86400000;
+  const cfg = { "1P": { alum: 6, base: 42, obj: 65 }, "2P": { alum: 7, base: 66, obj: 90 }, "3P": { alum: 5, base: 84, obj: 105 } };
+  const textos = { "1P": ["Mi familia", "Las frutas", "Los colores", "El cuerpo humano", "Los sentidos"], "2P": ["Las abejas", "El agua", "El mercado", "Los dinosaurios", "Las plantas"], "3P": ["Los volcanes", "El sistema solar", "El reciclaje", "Los oficios", "Los seres vivos"] };
+  let uid = 0;
+  Object.entries(cfg).forEach(([curso, c]) => {
+    for (let a = 0; a < c.alum; a++) {
+      const id = "al-" + (uid++);
+      als.push({ id, nombre: `Alumno ${curso}-${a + 1}`, curso });
+      const nLect = 4 + Math.floor(Math.random() * 6);
+      const arranque = c.base + Math.round((Math.random() - 0.5) * 20);
+      const ritmo = 2 + Math.random() * 4;
+      for (let i = 0; i < nLect; i++) {
+        const ppm = Math.max(20, Math.round(arranque + i * ritmo + (Math.random() - 0.5) * 8));
+        const prec = Math.min(99, Math.round(80 + i * 1.5 + Math.random() * 8));
+        const errBase = Math.max(0, 5 - i);
+        const verif = i % 3 === 0;
+        ses.push({
+          id: `s-${uid}-${i}`, alumno_id: id, alumno_nombre: `Alumno ${curso}-${a + 1}`,
+          curso, texto_id: curso.toLowerCase() + "-" + i, texto_titulo: textos[curso][i % 5],
+          ppm, precision: prec, fluency: Math.round(prec * 0.7 + Math.random() * 15), prosody: Math.round(45 + i * 3 + Math.random() * 20),
+          omisiones: Math.round(Math.random() * errBase), sustituciones: Math.round(Math.random() * errBase),
+          inversiones: Math.random() < 0.2 ? 1 : 0, adiciones: Math.random() < 0.3 ? 1 : 0,
+          repeticiones: Math.round(Math.random() * 2), rectificaciones: Math.random() < 0.4 ? 1 : 0,
+          vacilaciones: Math.round(Math.random() * 2),
+          duracion_segundos: 80 + Math.round(Math.random() * 60),
+          estado: verif ? "verificada" : "analizada",
+          niveles: verif ? { velocidad: ppm >= c.obj ? 3 : ppm >= c.obj * 0.8 ? 2 : 1, comprension: 1 + Math.round(Math.random() * 2) } : null,
+          fecha: new Date(Date.now() - (nLect - i) * 5 * dia - a * dia).toISOString()
+        });
+      }
+    }
+  });
+  return { alumnos: als, sesiones: ses };
+}
+
+init();
 </script>
 </body>
 </html>
