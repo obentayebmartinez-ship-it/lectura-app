@@ -290,6 +290,15 @@
       doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor.apply(doc, GRIS_CLARO);
       doc.text(`sesión del ${fmtFecha(ultimaVerif.fecha)} · 1 bajo · 2 medio · 3 alto`, 196, y, { align: "right" });
       y = dibujarNiveles(doc, y + 7, ultimaVerif.niveles) + 4;
+
+      // Explicación de cómo se leen los niveles (evita que el color, ahora
+      // neutro, se malinterprete: un "3" no siempre es bueno ni malo)
+      const explic = "Cómo se leen los niveles (1 bajo · 2 medio · 3 alto): en velocidad, pausas y entonación y comprensión, un nivel más alto es mejor; en el resto (errores), el nivel indica cuánta dificultad se observa. La velocidad se calcula sobre el objetivo del curso, la entonación con el análisis de voz y los errores por su frecuencia cada 100 palabras. Silabeo, rotación y comprensión los valora el profesional por observación directa.";
+      const linExp = doc.splitTextToSize(explic, 182);
+      if (y + linExp.length * 3.3 > 286) { doc.addPage(); y = 18; }
+      doc.setFontSize(7.5); doc.setFont("helvetica", "normal"); doc.setTextColor.apply(doc, GRIS);
+      doc.text(linExp, 14, y);
+      y += linExp.length * 3.3 + 5;
     }
 
     // Historial de lecturas
