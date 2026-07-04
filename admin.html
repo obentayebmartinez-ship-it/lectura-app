@@ -38,6 +38,12 @@
     tbody td { text-align: center; padding: 9px 6px; color: #374151; border-bottom: 0.5px solid #f3f4f6; white-space: nowrap; }
     tbody tr:last-child td { border-bottom: none; }
     .curso-tag { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+    .user-row { cursor: pointer; }
+    .user-row:hover td { background: #f9fafb; }
+    .caret { display: inline-block; width: 12px; color: #9ca3af; font-size: 10px; }
+    .sub-tabla { background: #f9fafb; }
+    .sub-tabla thead th { padding: 6px; font-size: 10px; }
+    .sub-tabla td { padding: 6px; font-size: 12px; }
     .fuerte { font-weight: 600; color: #111; }
     .pctil { font-size: 11px; color: #9ca3af; }
     .pct-badge { font-size: 10px; padding: 1px 5px; border-radius: 5px; margin-left: 4px; }
@@ -78,7 +84,8 @@ const NOMBRE_CURSO = { "1P": "1º Primaria", "2P": "2º Primaria", "3P": "3º Pr
 const COLOR_CURSO = { "1P": "#1D9E75", "2P": "#378ADD", "3P": "#EF9F27", "4P": "#8B5CF6", "5P": "#EC4899", "6P": "#14B8A6" };
 const MIN_FIABLE = 8;   // por debajo de N sesiones, el baremo se marca como poco fiable
 
-let alumnos = [];
+let usuarios = [];          // profesionales registrados (con nombre/email)
+let alumnos = [];           // alumnos de todos los usuarios (SIN nombre)
 let sesiones = [];          // todas las válidas (ppm>0), con ._curso y ._verif anotados
 let charts = [];
 
@@ -100,18 +107,33 @@ function resumen(valores) {
 }
 
 async function init() {
-  if (DEMO) { const d = cargarDemo(); alumnos = d.alumnos; procesar(d.sesiones); rerender(); return; }
+  if (DEMO) { const d = cargarDemo(); usuarios = d.usuarios; alumnos = d.alumnos; procesar(d.sesiones); rerender(); return; }
 
   const { data } = await sb.auth.getSession();
   if (!data.session) { window.location.href = "login.html"; return; }
 
-  const [{ data: als }, { data: ses }] = await Promise.all([
-    sb.from("alumnos").select("*"),
-    sb.from("sesiones").select("*").order("fecha", { ascending: true })
-  ]);
-  alumnos = als || [];
-  procesar(ses || []);
-  rerender();
+  // Los datos globales (de todos los usuarios) los sirve la función serverless,
+  // que salta el RLS con la service_role key y comprueba que somos admin.
+  try {
+    const r = await fetch("/api/admin-stats", {
+      headers: { Authorization: "Bearer " + data.session.access_token }
+    });
+    if (r.status === 403) {
+      document.getElementById("contenido").innerHTML =
+        `<div class="card"><div class="loading">Esta cuenta no tiene acceso de administrador.<br>Añade su email a la variable <code>ADMIN_EMAILS</code> en Vercel.</div></div>`;
+      return;
+    }
+    if (!r.ok) throw new Error("HTTP " + r.status + " — " + (await r.text()));
+    const j = await r.json();
+    usuarios = j.usuarios || [];
+    alumnos = j.alumnos || [];
+    procesar(j.sesiones || []);
+    rerender();
+  } catch (e) {
+    document.getElementById("contenido").innerHTML =
+      `<div class="card"><div class="loading">No se pudieron cargar los datos globales.<br><span style="color:#B45309">${e.message}</span><br><br>
+       Revisa que <code>api/admin-stats.js</code> esté desplegada y que <code>SUPABASE_SERVICE_KEY</code> y <code>ADMIN_EMAILS</code> estén configuradas en Vercel.</div></div>`;
+  }
 }
 
 // Anota cada sesión con su curso (ficha del alumno o campo suelto) y si está verificada
@@ -143,11 +165,12 @@ function render(ses, soloV) {
 
   document.getElementById("contenido").innerHTML = `
     ${bloqueKPIs(ses)}
+    ${bloqueUsuarios(ses)}
     <div class="card">
       <div class="card-title">Baremo por curso — velocidad y precisión</div>
-      <div class="card-sub">Medias y percentiles de tu muestra. Un alumno en el p50 lee mejor que la mitad de las lecturas de su curso.</div>
+      <div class="card-sub">Medias y percentiles de TODA la plataforma. Un alumno en el p50 lee mejor que la mitad de las lecturas de su curso.</div>
       <div class="tabla-wrap">${tablaBaremo(ses)}</div>
-      <div class="nota">Los percentiles (p25 · p50 · p75) describen tu propia población. El objetivo es la referencia curricular de <code>config.js</code>.</div>
+      <div class="nota">Los percentiles (p25 · p50 · p75) describen la población global de la app. El objetivo es la referencia curricular de <code>config.js</code>.</div>
     </div>
     <div class="grid-2">
       <div class="card">
@@ -190,19 +213,20 @@ function render(ses, soloV) {
 
 // ─── KPIs globales ────────────────────────────────────────────────────────────
 function bloqueKPIs(ses) {
-  const alumnosConLectura = new Set(ses.map(s => s.alumno_id || s.alumno_nombre)).size;
+  const alumnosConLectura = new Set(ses.map(s => s.alumno_id)).size;
   const verif = ses.filter(s => s._verif).length;
   const pctVerif = Math.round((verif / ses.length) * 100);
   const ppmG = resumen(ses.map(s => s.ppm));
   const precG = resumen(ses.map(s => s.precision));
   const minutos = ses.reduce((s, r) => s + (r.duracion_segundos || 120), 0) / 60;
   const gasto = (minutos * 0.006).toFixed(2);
+  const nUsuarios = usuarios.length || new Set(ses.map(s => s.user_id)).size;
   return `
     <div class="grid-4">
       <div class="card">
-        <div class="metric-label">Alumnos con lecturas</div>
-        <div class="metric-value">${alumnosConLectura}</div>
-        <div class="metric-sub">de ${alumnos.length || alumnosConLectura} en la ficha</div>
+        <div class="metric-label">Usuarios registrados</div>
+        <div class="metric-value">${nUsuarios}</div>
+        <div class="metric-sub">${alumnos.length} alumnos · ${alumnosConLectura} con lecturas</div>
       </div>
       <div class="card">
         <div class="metric-label">Lecturas registradas</div>
@@ -220,6 +244,80 @@ function bloqueKPIs(ses) {
         <div class="metric-sub">gasto Azure estimado ~$${gasto}</div>
       </div>
     </div>`;
+}
+
+// ─── Usuarios (profesionales) y sus alumnos ──────────────────────────────────
+// Muestra cada usuario registrado con cuántos alumnos y sesiones tiene. Los
+// alumnos NO llevan nombre: se identifican por curso y su nº de orden.
+function bloqueUsuarios(ses) {
+  // Alumnos por usuario, y sesiones por usuario y por alumno
+  const porUser = {};
+  usuarios.forEach(u => { porUser[u.id] = { ...u, alumnos: [], nSes: 0, ultima: null }; });
+  alumnos.forEach(a => {
+    const u = porUser[a.user_id] || (porUser[a.user_id] = { id: a.user_id, email: "(sin cuenta)", nombre: null, alumnos: [], nSes: 0, ultima: null });
+    u.alumnos.push(a);
+  });
+  const sesPorAlumno = {};
+  ses.forEach(s => {
+    const u = porUser[s.user_id];
+    if (u) { u.nSes++; if (!u.ultima || s.fecha > u.ultima) u.ultima = s.fecha; }
+    (sesPorAlumno[s.alumno_id] = sesPorAlumno[s.alumno_id] || []).push(s);
+  });
+
+  const lista = Object.values(porUser).sort((a, b) => b.nSes - a.nSes);
+  if (!lista.length) return "";
+
+  const filas = lista.map((u, i) => {
+    const nombre = u.nombre || u.email || "(usuario)";
+    const ultima = u.ultima ? new Date(u.ultima).toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "2-digit" }) : "—";
+    // Sub-tabla de sus alumnos (sin nombre)
+    const sub = u.alumnos.length
+      ? u.alumnos.map((a, k) => {
+          const sesA = sesPorAlumno[a.id] || [];
+          const ult = sesA.length ? sesA[sesA.length - 1] : null;
+          return `<tr>
+            <td class="izq"><span class="curso-tag" style="background:${COLOR_CURSO[a.curso] || '#ccc'}"></span>Alumno ${k + 1}</td>
+            <td>${NOMBRE_CURSO[a.curso] || a.curso}</td>
+            <td>${sesA.length}</td>
+            <td>${ult ? r0(ult.ppm) + " PPM" : "—"}</td>
+          </tr>`;
+        }).join("")
+      : `<tr><td class="izq" colspan="4" style="color:#9ca3af">Sin alumnos</td></tr>`;
+    return `
+      <tr class="user-row" onclick="toggleUsuario('u${i}')">
+        <td class="izq fuerte"><span class="caret" id="caret-u${i}">▸</span> ${nombre}</td>
+        <td class="izq pctil">${u.nombre ? u.email : ""}</td>
+        <td>${u.alumnos.length}</td>
+        <td>${u.nSes}</td>
+        <td>${ultima}</td>
+      </tr>
+      <tr id="u${i}" class="user-detalle" style="display:none"><td colspan="5" style="padding:0">
+        <table class="sub-tabla"><thead><tr>
+          <th class="izq">Alumno</th><th>Curso</th><th>Lecturas</th><th>Última</th>
+        </tr></thead><tbody>${sub}</tbody></table>
+      </td></tr>`;
+  }).join("");
+
+  return `
+    <div class="card">
+      <div class="card-title">Usuarios y sus alumnos</div>
+      <div class="card-sub">Pulsa un usuario para ver sus alumnos (identificados por curso y número, sin nombre).</div>
+      <div class="tabla-wrap"><table>
+        <thead><tr>
+          <th class="izq">Usuario</th><th class="izq">Email</th><th>Alumnos</th><th>Lecturas</th><th>Última actividad</th>
+        </tr></thead>
+        <tbody>${filas}</tbody>
+      </table></div>
+    </div>`;
+}
+
+function toggleUsuario(id) {
+  const fila = document.getElementById(id);
+  const caret = document.getElementById("caret-" + id);
+  if (!fila) return;
+  const abierto = fila.style.display !== "none";
+  fila.style.display = abierto ? "none" : "table-row";
+  if (caret) caret.textContent = abierto ? "▸" : "▾";
 }
 
 // ─── Baremo: velocidad y precisión ────────────────────────────────────────────
@@ -440,8 +538,14 @@ function dibujarUso(ses) {
   }));
 }
 
-// ─── Demo (?demo=1): varios cursos y alumnos sintéticos ───────────────────────
+// ─── Demo (?demo=1): varios usuarios, cursos y alumnos sintéticos ─────────────
 function cargarDemo() {
+  const usrs = [
+    { id: "us-1", email: "gabinete.norte@ejemplo.com", nombre: "Gabinete Norte", creado: null },
+    { id: "us-2", email: "logopedia.sur@ejemplo.com", nombre: "Logopedia Sur", creado: null },
+    { id: "us-3", email: "ana.psicopedagoga@ejemplo.com", nombre: "Ana (psicopedagoga)", creado: null },
+    { id: "us-4", email: "nuevo.centro@ejemplo.com", nombre: "Centro Nuevo", creado: null }
+  ];
   const als = [], ses = [];
   const dia = 86400000;
   const cfg = { "1P": { alum: 6, base: 42, obj: 65 }, "2P": { alum: 7, base: 66, obj: 90 }, "3P": { alum: 5, base: 84, obj: 105 } };
@@ -450,7 +554,9 @@ function cargarDemo() {
   Object.entries(cfg).forEach(([curso, c]) => {
     for (let a = 0; a < c.alum; a++) {
       const id = "al-" + (uid++);
-      als.push({ id, nombre: `Alumno ${curso}-${a + 1}`, curso });
+      // Reparte alumnos entre los 3 primeros usuarios (el 4º queda sin alumnos)
+      const user_id = usrs[uid % 3].id;
+      als.push({ id, user_id, curso });
       const nLect = 4 + Math.floor(Math.random() * 6);
       const arranque = c.base + Math.round((Math.random() - 0.5) * 20);
       const ritmo = 2 + Math.random() * 4;
@@ -460,7 +566,7 @@ function cargarDemo() {
         const errBase = Math.max(0, 5 - i);
         const verif = i % 3 === 0;
         ses.push({
-          id: `s-${uid}-${i}`, alumno_id: id, alumno_nombre: `Alumno ${curso}-${a + 1}`,
+          id: `s-${uid}-${i}`, user_id, alumno_id: id,
           curso, texto_id: curso.toLowerCase() + "-" + i, texto_titulo: textos[curso][i % 5],
           ppm, precision: prec, fluency: Math.round(prec * 0.7 + Math.random() * 15), prosody: Math.round(45 + i * 3 + Math.random() * 20),
           omisiones: Math.round(Math.random() * errBase), sustituciones: Math.round(Math.random() * errBase),
@@ -475,7 +581,7 @@ function cargarDemo() {
       }
     }
   });
-  return { alumnos: als, sesiones: ses };
+  return { usuarios: usrs, alumnos: als, sesiones: ses };
 }
 
 init();
