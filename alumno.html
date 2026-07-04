@@ -36,6 +36,12 @@
     .progreso-fill { height: 100%; border-radius: 4px; background: #1D9E75; transition: width .4s; }
     .card-title { font-size: 14px; font-weight: 500; color: #111; margin-bottom: 1rem; }
     .card-title small { font-size: 11px; font-weight: 400; color: #9ca3af; }
+    .card-sub { font-size: 11px; color: #9ca3af; margin-top: -0.6rem; margin-bottom: 0.85rem; }
+    .prop-fila { display: flex; gap: 10px; align-items: flex-start; padding: 9px 0; border-bottom: 0.5px solid #f3f4f6; }
+    .prop-fila:last-child { border-bottom: none; }
+    .prop-num { flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%; background: #EEF2F7; color: #475569; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; margin-top: 1px; }
+    .prop-texto { font-size: 13px; color: #374151; line-height: 1.45; }
+    .prop-prio { display: inline-block; font-size: 10px; font-weight: 600; color: #0F6E56; background: #E1F5EE; padding: 1px 7px; border-radius: 10px; margin-right: 6px; vertical-align: middle; }
     .sesion-fila { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 0.5px solid #f3f4f6; flex-wrap: wrap; }
     .sesion-fila:last-child { border-bottom: none; }
     .sesion-titulo { font-size: 13px; font-weight: 500; color: #111; }
@@ -138,6 +144,12 @@
     <div id="registro-col-2"></div>
   </div>
   <div class="nota" id="registro-nota"></div>
+</div>
+
+<div class="card" id="card-propuesta" style="display:none;margin-bottom:1.25rem;">
+  <div class="card-title">🎯 Propuesta de trabajo</div>
+  <div class="card-sub" id="propuesta-fuente"></div>
+  <div id="lista-propuesta"></div>
 </div>
 
 <div class="card" style="margin-bottom:1.25rem;">
@@ -355,11 +367,15 @@ function render(sesiones) {
   document.getElementById("leyenda-errores").innerHTML = tiposError.map(t =>
     `<span class="ley-item"><span class="ley-dot" style="background:${t.hex}"></span>${t.label}</span>`).join("");
 
-  // ── Hoja de registro (última verificación del docente) ──
+  // ── Hoja de registro (última verificación del profesional) ──
   const conNiveles = verificadas.filter(s => s.niveles && Object.keys(s.niveles).length);
+  const ultimaVerif = conNiveles[conNiveles.length - 1] || null;
   if (conNiveles.length) {
-    renderRegistro(conNiveles[conNiveles.length - 1], conNiveles[conNiveles.length - 2]);
+    renderRegistro(ultimaVerif, conNiveles[conNiveles.length - 2]);
   }
+
+  // ── Propuesta de trabajo (misma lógica que el informe PDF) ──
+  renderPropuesta(sesionesValidas, ultimaVerif);
 
   // ── Historial (más reciente primero) ──
   document.getElementById("lista-sesiones").innerHTML = sesionesValidas.slice().reverse().map(s => {
@@ -429,6 +445,25 @@ function renderRegistro(sesion, previa) {
   document.getElementById("registro-nota").textContent = previa
     ? `Comparado con la verificación anterior (${fmtFecha(previa.fecha)}).`
     : "Primera sesión verificada por el docente.";
+}
+
+// Propuesta de trabajo en pantalla, reutilizando la lógica de informe.js
+function renderPropuesta(ses, ultimaVerif) {
+  const trabajo = InformeLectorIA.propuestaTrabajo(ses, ultimaVerif);
+  document.getElementById("card-propuesta").style.display = "block";
+  document.getElementById("propuesta-fuente").textContent = ultimaVerif
+    ? `Según la hoja de registro verificada del ${fmtFecha(ultimaVerif.fecha)}.`
+    : "A partir de los errores de las últimas lecturas (aún sin verificación del profesional).";
+  const cont = document.getElementById("lista-propuesta");
+  if (!trabajo.length) {
+    cont.innerHTML = `<div class="prop-fila"><span class="prop-num">✓</span><span class="prop-texto">No se detectan dificultades específicas: mantener la práctica lectora habitual y ampliar poco a poco la complejidad de los textos.</span></div>`;
+    return;
+  }
+  cont.innerHTML = trabajo.map((t, i) => `
+    <div class="prop-fila">
+      <span class="prop-num">${i + 1}</span>
+      <span class="prop-texto">${t.sev === 2 ? '<span class="prop-prio">Prioritario</span>' : ""}${t.texto}</span>
+    </div>`).join("");
 }
 
 function generarPDF() {

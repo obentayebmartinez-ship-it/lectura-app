@@ -191,6 +191,28 @@
     return maxY;
   }
 
+  // ─── Propuesta de trabajo: qué reforzar según lo que más le cuesta ──────────
+  // Prioriza la hoja de registro verificada; si no la hay, deduce el trabajo de
+  // los tipos de error de las últimas lecturas. Devuelve [{sev, key, texto}]
+  // (sev 2 = prioritario), como máximo 5, ordenadas por gravedad.
+  function propuestaTrabajo(ses, ultimaVerif) {
+    const trabajo = [];
+    if (ultimaVerif && ultimaVerif.niveles) {
+      Object.keys(ETIQUETA_DIM).forEach(k => {
+        const sev = severidadNivel(k, ultimaVerif.niveles[k]);
+        if (sev > 0 && CONSEJOS_TRABAJO[k]) trabajo.push({ sev, key: k, texto: CONSEJOS_TRABAJO[k] });
+      });
+    } else {
+      const recientes = (ses || []).slice(-5);
+      TIPOS_ERROR.forEach(t => {
+        const tot = recientes.reduce((s, r) => s + (r[t.key] || 0), 0);
+        const dim = ERR_A_DIM[t.key];
+        if (tot >= 3 && dim) trabajo.push({ sev: tot >= 6 ? 2 : 1, key: dim, texto: CONSEJOS_TRABAJO[dim] });
+      });
+    }
+    return trabajo.sort((a, b) => b.sev - a.sev).slice(0, 5);
+  }
+
   // ─── Caja de texto con título y viñetas, con salto de página propio ─────────
   function cajaTexto(doc, y, titulo, bullets, fill, headColor) {
     doc.setFontSize(9);
@@ -364,25 +386,9 @@
     y = cajaTexto(doc, y, "Observaciones", obs, [240, 253, 244], [15, 110, 86]);
 
     // ── Propuesta de trabajo: recomendaciones según lo que más le cuesta ──
-    // Prioriza la hoja de registro verificada; si no la hay, deduce el trabajo
-    // de los tipos de error de las últimas lecturas.
-    const trabajo = [];
-    if (ultimaVerif) {
-      Object.keys(ETIQUETA_DIM).forEach(k => {
-        const sev = severidadNivel(k, ultimaVerif.niveles[k]);
-        if (sev > 0 && CONSEJOS_TRABAJO[k]) trabajo.push({ sev, texto: CONSEJOS_TRABAJO[k] });
-      });
-    } else {
-      const recientes = ses.slice(-5);
-      TIPOS_ERROR.forEach(t => {
-        const tot = recientes.reduce((s, r) => s + (r[t.key] || 0), 0);
-        const dim = ERR_A_DIM[t.key];
-        if (tot >= 3 && dim) trabajo.push({ sev: tot >= 6 ? 2 : 1, texto: CONSEJOS_TRABAJO[dim] });
-      });
-    }
-    trabajo.sort((a, b) => b.sev - a.sev);
+    const trabajo = propuestaTrabajo(ses, ultimaVerif);
     const propuestas = trabajo.length
-      ? trabajo.slice(0, 5).map(t => (t.sev === 2 ? "Prioritario — " : "") + t.texto)
+      ? trabajo.map(t => (t.sev === 2 ? "Prioritario — " : "") + t.texto)
       : ["No se detectan dificultades específicas: mantener la práctica lectora habitual y ampliar poco a poco la complejidad de los textos."];
     y = cajaTexto(doc, y, "Propuesta de trabajo", propuestas, [245, 247, 250], TINTA);
 
@@ -398,5 +404,5 @@
     doc.save(`informe_${nombre.replace(/ /g, "_")}_${hoy.replace(/\//g, "-")}.pdf`);
   }
 
-  global.InformeLectorIA = { generar, TIPOS_ERROR };
+  global.InformeLectorIA = { generar, propuestaTrabajo, TIPOS_ERROR };
 })(typeof window !== "undefined" ? window : this);
