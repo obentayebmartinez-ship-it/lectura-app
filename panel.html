@@ -6,6 +6,7 @@
   <title>LectorIA — Panel</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
+  <script src="informe.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
@@ -23,7 +24,15 @@
     .metric-label { font-size: 11px; color: #6b7280; margin-bottom: 4px; }
     .metric-value { font-size: 26px; font-weight: 500; color: #111; }
     .metric-sub { font-size: 11px; color: #9ca3af; margin-top: 2px; }
+    .metric-split { display: flex; gap: 6px; margin-top: 8px; }
+    .split-seg { flex: 1; text-align: center; padding: 5px 0; border-radius: 8px; font-size: 11px; font-weight: 600; }
+    .split-ok { background: #E1F5EE; color: #0F6E56; }
+    .split-warn { background: #FAEEDA; color: #633806; }
+    .split-bad { background: #FCEBEB; color: #791F1F; }
+    .split-seg small { display: block; font-size: 9px; font-weight: 400; opacity: 0.75; }
     .card-title { font-size: 14px; font-weight: 500; color: #111; margin-bottom: 1rem; }
+    .card-title .filtro { float: right; font-size: 11px; font-weight: 400; }
+    .card-title .filtro select { font-size: 11px; padding: 3px 8px; border-radius: 6px; border: 0.5px solid #e5e7eb; color: #374151; }
     .add-alumno { display: flex; gap: 8px; margin-bottom: 1rem; flex-wrap: wrap; }
     .add-alumno input, .add-alumno select { padding: 8px 12px; border-radius: 8px; border: 0.5px solid #e5e7eb; font-size: 13px; flex: 1; min-width: 120px; color: #111; outline: none; }
     .add-alumno input:focus, .add-alumno select:focus { border-color: #1D9E75; }
@@ -43,7 +52,16 @@
     .error-fila:last-child { border-bottom: none; }
     .barra-wrap { background: #f3f4f6; border-radius: 4px; height: 6px; width: 100px; overflow: hidden; }
     .barra-fill { height: 100%; border-radius: 4px; }
+    .alumno-stats { display: flex; align-items: center; gap: 8px; margin-top: 3px; }
+    .mini-ppm { font-size: 11px; color: #6b7280; }
+    .mini-spark { height: 22px; }
+    .alerta-fila { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 0.5px solid #f3f4f6; font-size: 13px; }
+    .alerta-fila:last-child { border-bottom: none; }
+    .alerta-icono { flex-shrink: 0; }
+    .alerta-texto { flex: 1; color: #374151; }
+    .alerta-texto b { color: #111; font-weight: 500; }
     .loading { text-align: center; color: #9ca3af; font-size: 13px; padding: 2rem; }
+    .empty { text-align: center; color: #9ca3af; font-size: 13px; padding: 1.5rem 0; }
     @media (max-width: 700px) { .grid-4 { grid-template-columns: 1fr 1fr; } .grid-2 { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -62,24 +80,26 @@
 
 <div class="grid-4">
   <div class="card">
-    <div class="metric-label">PPM medio clase</div>
+    <div class="metric-label">PPM medio de la clase</div>
     <div class="metric-value" id="ppm-medio">—</div>
-    <div class="metric-sub">palabras por minuto</div>
+    <div class="metric-sub" id="ppm-medio-sub">palabras por minuto (última de cada alumno)</div>
   </div>
   <div class="card">
     <div class="metric-label">Precisión media</div>
     <div class="metric-value" id="prec-media">—</div>
-    <div class="metric-sub">% de acierto</div>
+    <div class="metric-sub">% de palabras correctas</div>
   </div>
   <div class="card">
-    <div class="metric-label">Total sesiones</div>
-    <div class="metric-value" id="total-sesiones">—</div>
-    <div class="metric-sub">lecturas completadas</div>
-  </div>
-  <div class="card">
-    <div class="metric-label">Alumnos activos</div>
+    <div class="metric-label">Alumnos con lecturas</div>
     <div class="metric-value" id="alumnos-activos">—</div>
-    <div class="metric-sub">han leído al menos 1 vez</div>
+    <div class="metric-sub" id="alumnos-activos-sub">de un total de — · — sesiones</div>
+  </div>
+  <div class="card">
+    <div class="metric-label">Reparto por nivel</div>
+    <div class="metric-split" id="reparto-nivel">
+      <div class="split-seg split-ok">—</div>
+    </div>
+    <div class="metric-sub">según el objetivo de cada curso</div>
   </div>
 </div>
 
@@ -101,15 +121,17 @@
     <div id="lista-mis-alumnos"><div class="loading">Cargando alumnos...</div></div>
   </div>
   <div class="card">
-    <div class="card-title">Evolución PPM de la clase</div>
+    <div class="card-title">Evolución PPM de la clase
+      <span class="filtro"><select id="filtro-alumno" onchange="dibujarEvolucion()"><option value="">Media de la clase</option></select></span>
+    </div>
     <canvas id="chartPPM" height="220"></canvas>
   </div>
 </div>
 
 <div class="grid-2">
   <div class="card">
-    <div class="card-title">Últimas sesiones</div>
-    <div id="lista-alumnos"><div class="loading">Cargando...</div></div>
+    <div class="card-title">Necesitan atención</div>
+    <div id="lista-alertas"><div class="loading">Cargando...</div></div>
   </div>
   <div class="card">
     <div class="card-title">Tipos de errores acumulados</div>
@@ -120,16 +142,28 @@
 <script>
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-let todosLosDatos = [];
 let sesionUsuario = null;
+let alumnos = [];          // filas de la tabla alumnos
+let grupos = [];           // [{ id, nombre, curso, objetivo, sesiones:[], ultima, estado }]
+let chartEvol = null;
+
+const DIA = 24 * 3600 * 1000;
+const fmtFecha = f => new Date(f).toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit" });
+const media = a => a.length ? a.reduce((s, v) => s + v, 0) / a.length : 0;
+const objetivoDe = curso => OBJETIVOS_PPM[curso] || 90;
+
+function estadoDe(ppm, objetivo) {
+  if (ppm >= objetivo)       return { clave: "ok",   texto: "En nivel",      color: "#1D9E75" };
+  if (ppm >= objetivo * 0.8) return { clave: "warn", texto: "Cerca",         color: "#EF9F27" };
+  return { clave: "bad", texto: "Necesita apoyo", color: "#E24B4A" };
+}
 
 async function init() {
   const { data } = await sb.auth.getSession();
   if (!data.session) { window.location.href = "login.html"; return; }
   sesionUsuario = data.session.user;
   document.getElementById("user-email").textContent = sesionUsuario.user_metadata?.nombre || sesionUsuario.email;
-  await cargarAlumnos();
-  await cargarDatos();
+  await cargarTodo();
 }
 
 async function cerrarSesion() {
@@ -144,27 +178,7 @@ async function añadirAlumno() {
   const { error } = await sb.from("alumnos").insert({ nombre, curso, user_id: sesionUsuario.id });
   if (error) { alert("Error al añadir alumno"); return; }
   document.getElementById("nuevo-nombre").value = "";
-  await cargarAlumnos();
-}
-
-async function cargarAlumnos() {
-  const { data } = await sb.from("alumnos").select("*").eq("user_id", sesionUsuario.id).order("nombre");
-  const lista = document.getElementById("lista-mis-alumnos");
-  if (!data || data.length === 0) {
-    lista.innerHTML = "<div class='loading'>Aún no has añadido alumnos</div>";
-    return;
-  }
-  lista.innerHTML = data.map(a => `
-    <div class="alumno-fila">
-      <div>
-        <div class="alumno-nombre">${a.nombre}</div>
-        <div class="alumno-meta">${a.curso}</div>
-      </div>
-      <div class="alumno-derecha">
-        <button class="btn-pdf" onclick="window.location.href='alumno.html?id=${a.id}'">📊 Ver</button>
-        <button class="btn-leer" onclick="irALectura('${a.id}', '${a.nombre}', '${a.curso}')">▶ Leer</button>
-      </div>
-    </div>`).join("");
+  await cargarTodo();
 }
 
 function irALectura(id, nombre, curso) {
@@ -174,163 +188,242 @@ function irALectura(id, nombre, curso) {
   window.location.href = "index.html";
 }
 
-async function cargarDatos() {
-  const { data, error } = await sb.from("sesiones").select("*").order("fecha", { ascending: true });
-  if (error || !data || data.length === 0) {
-    document.getElementById("lista-alumnos").innerHTML = "<div class='loading'>No hay sesiones todavía</div>";
-    document.getElementById("lista-errores").innerHTML = "<div class='loading'>No hay datos todavía</div>";
-    return;
-  }
-  todosLosDatos = data;
+// ─── Carga: alumnos + sesiones juntos, agrupados por alumno ─────────────────
+async function cargarTodo() {
+  const [{ data: als }, { data: ses }] = await Promise.all([
+    sb.from("alumnos").select("*").eq("user_id", sesionUsuario.id).order("nombre"),
+    sb.from("sesiones").select("*").order("fecha", { ascending: true })
+  ]);
+  alumnos = als || [];
+  const sesiones = (ses || []).filter(s => s.ppm && s.ppm > 0);
 
-  const ppmMedio = Math.round(data.reduce((s, r) => s + r.ppm, 0) / data.length);
-  const precMedia = Math.round(data.reduce((s, r) => s + r.precision, 0) / data.length);
-  const alumnos = [...new Set(data.map(r => r.alumno_nombre))];
-  document.getElementById("ppm-medio").textContent = ppmMedio;
-  document.getElementById("prec-media").textContent = precMedia + "%";
-  document.getElementById("total-sesiones").textContent = data.length;
-  document.getElementById("alumnos-activos").textContent = alumnos.length;
-
-  const labels = data.map(r => new Date(r.fecha).toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit" }));
-  new Chart(document.getElementById("chartPPM"), {
-    type: "line",
-    data: {
-      labels,
-      datasets: [{
-        data: data.map(r => r.ppm),
-        borderColor: "#1D9E75",
-        backgroundColor: "rgba(29,158,117,0.08)",
-        borderWidth: 2,
-        pointRadius: 3,
-        fill: true,
-        tension: 0.35
-      }, {
-        data: Array(labels.length).fill(90),
-        borderColor: "#d1d5db",
-        borderWidth: 1.5,
-        borderDash: [5, 4],
-        pointRadius: 0,
-        fill: false
-      }]
-    },
-    options: {
-      responsive: true,
-      plugins: { legend: { display: false } },
-      scales: {
-        y: { min: 40, max: 140, ticks: { font: { size: 11 }, color: "#9ca3af" }, grid: { color: "rgba(0,0,0,0.04)" } },
-        x: { ticks: { font: { size: 11 }, color: "#9ca3af" }, grid: { display: false } }
-      }
+  // Agrupa por alumno_id; los alumnos sin sesiones también aparecen
+  const porId = {};
+  alumnos.forEach(a => { porId[a.id] = { id: a.id, nombre: a.nombre, curso: a.curso, objetivo: objetivoDe(a.curso), sesiones: [] }; });
+  sesiones.forEach(s => {
+    const g = porId[s.alumno_id];
+    if (g) g.sesiones.push(s);
+    else { // sesión de un alumno borrado o sin ficha: se agrupa por nombre
+      const k = "n:" + s.alumno_nombre;
+      (porId[k] = porId[k] || { id: null, nombre: s.alumno_nombre, curso: s.curso || "2P", objetivo: objetivoDe(s.curso), sesiones: [] }).sesiones.push(s);
     }
   });
+  grupos = Object.values(porId).map(g => {
+    g.ultima = g.sesiones[g.sesiones.length - 1] || null;
+    g.estado = g.ultima ? estadoDe(g.ultima.ppm, g.objetivo) : null;
+    return g;
+  });
 
-  const ultimasSesiones = {};
-  data.forEach(r => { ultimasSesiones[r.alumno_nombre] = r; });
-  document.getElementById("lista-alumnos").innerHTML = Object.values(ultimasSesiones).map(r => {
-    const objetivo = OBJETIVOS_PPM[r.curso] || 90;
-    const badge = r.ppm >= objetivo ? "badge-ok" : r.ppm >= objetivo * 0.8 ? "badge-warn" : "badge-bad";
-    const texto = r.ppm >= objetivo ? "En nivel" : r.ppm >= objetivo * 0.8 ? "Cerca" : "Necesita apoyo";
-    const verificada = r.estado === "verificada";
+  renderMetricas(sesiones);
+  renderListaAlumnos();
+  renderAlertas();
+  renderErrores(sesiones);
+  poblarFiltro();
+  dibujarEvolucion();
+}
+
+// ─── Tarjetas de métricas ────────────────────────────────────────────────────
+function renderMetricas(sesiones) {
+  const activos = grupos.filter(g => g.ultima);
+  const ppmsUlt = activos.map(g => g.ultima.ppm);
+  const precUlt = activos.map(g => g.ultima.precision).filter(v => v != null);
+
+  document.getElementById("ppm-medio").textContent = ppmsUlt.length ? Math.round(media(ppmsUlt)) : "—";
+  document.getElementById("prec-media").textContent = precUlt.length ? Math.round(media(precUlt)) + "%" : "—";
+  document.getElementById("alumnos-activos").textContent = activos.length;
+  document.getElementById("alumnos-activos-sub").textContent =
+    `de ${alumnos.length || activos.length} en total · ${sesiones.length} sesiones`;
+
+  const reparto = { ok: 0, warn: 0, bad: 0 };
+  activos.forEach(g => reparto[g.estado.clave]++);
+  document.getElementById("reparto-nivel").innerHTML = activos.length ? `
+    <div class="split-seg split-ok">${reparto.ok}<small>en nivel</small></div>
+    <div class="split-seg split-warn">${reparto.warn}<small>cerca</small></div>
+    <div class="split-seg split-bad">${reparto.bad}<small>apoyo</small></div>`
+    : `<div class="split-seg split-ok" style="background:#f3f4f6;color:#9ca3af">sin datos</div>`;
+}
+
+// ─── SVG sparkline diminuto de la evolución del alumno ───────────────────────
+function sparkline(ppms, objetivo) {
+  if (ppms.length < 2) return "";
+  const w = 70, h = 22, lo = Math.min(...ppms), hi = Math.max(...ppms), rng = hi - lo || 1;
+  const pts = ppms.map((p, i) => `${(i / (ppms.length - 1)) * w},${h - ((p - lo) / rng) * (h - 4) - 2}`).join(" ");
+  const sube = ppms[ppms.length - 1] >= ppms[0];
+  return `<svg class="mini-spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+    <polyline points="${pts}" fill="none" stroke="${sube ? "#1D9E75" : "#E24B4A"}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+  </svg>`;
+}
+
+// ─── Lista "Mis alumnos" enriquecida con su estado actual ────────────────────
+function renderListaAlumnos() {
+  const lista = document.getElementById("lista-mis-alumnos");
+  if (!alumnos.length) { lista.innerHTML = "<div class='empty'>Aún no has añadido alumnos</div>"; return; }
+
+  lista.innerHTML = alumnos.map(a => {
+    const g = grupos.find(x => x.id === a.id);
+    const tiene = g && g.ultima;
+    const est = tiene ? g.estado : null;
+    const stats = tiene
+      ? `<div class="alumno-stats">
+           <span class="badge badge-${est.clave === "ok" ? "ok" : est.clave === "warn" ? "warn" : "bad"}">${est.texto}</span>
+           <span class="mini-ppm">${g.ultima.ppm} PPM · ${g.sesiones.length} lect.</span>
+           ${sparkline(g.sesiones.map(s => s.ppm), g.objetivo)}
+         </div>`
+      : `<div class="alumno-meta">Sin lecturas todavía</div>`;
     return `
       <div class="alumno-fila">
         <div>
-          <div class="alumno-nombre">${r.alumno_nombre}</div>
-          <div class="alumno-meta">${r.ppm} PPM · ${r.precision}% precisión</div>
+          <div class="alumno-nombre">${a.nombre} <span style="font-size:11px;color:#9ca3af;font-weight:400">${a.curso}</span></div>
+          ${stats}
         </div>
         <div class="alumno-derecha">
-          <span class="badge ${badge}">${texto}</span>
-          <button class="btn-pdf" onclick="window.location.href='verificar.html?sesion=${r.id}'">${verificada ? "✓ Verificada" : "✔ Verificar"}</button>
-          <button class="btn-pdf" onclick="window.location.href='alumno.html?id=${r.alumno_id}'">📊 Ver</button>
-          <button class="btn-pdf" onclick="generarPDF('${r.alumno_nombre}')">📄 PDF</button>
+          ${tiene ? `<button class="btn-pdf" onclick="window.location.href='alumno.html?id=${a.id}'">📊 Ver</button>` : ""}
+          <button class="btn-leer" onclick="irALectura('${a.id}', '${a.nombre.replace(/'/g, "\\'")}', '${a.curso}')">▶ Leer</button>
         </div>
       </div>`;
   }).join("");
+}
 
-  const tO = data.reduce((s, r) => s + r.omisiones, 0);
-  const tS = data.reduce((s, r) => s + r.sustituciones, 0);
-  const tR = data.reduce((s, r) => s + r.repeticiones, 0);
-  const tV = data.reduce((s, r) => s + (r.vacilaciones || 0), 0);
-  const tTotal = tO + tS + tR + tV || 1;
-  document.getElementById("lista-errores").innerHTML = [
-    { label: "Omisiones", val: tO, color: "#F09595" },
-    { label: "Sustituciones", val: tS, color: "#EF9F27" },
-    { label: "Repeticiones", val: tR, color: "#AFA9EC" },
-    { label: "Vacilaciones", val: tV, color: "#5DCAA5" }
-  ].map(e => `
+// ─── Alumnos que necesitan atención (priorizados) ────────────────────────────
+function renderAlertas() {
+  const hoy = Date.now();
+  const alertas = [];
+  grupos.filter(g => g.ultima).forEach(g => {
+    const dias = Math.floor((hoy - new Date(g.ultima.fecha)) / DIA);
+    const ppms = g.sesiones.map(s => s.ppm);
+    const baja = ppms.length >= 2 && ppms[ppms.length - 1] < ppms[ppms.length - 2];
+    const sinVerif = g.sesiones.some(s => s.estado !== "verificada");
+
+    if (g.estado.clave === "bad")
+      alertas.push({ pri: 0, icono: "🔴", g, txt: `<b>${g.nombre}</b> está por debajo del nivel (${g.ultima.ppm} de ${g.objetivo} PPM).`, sesion: g.ultima });
+    else if (baja && g.estado.clave === "warn")
+      alertas.push({ pri: 1, icono: "📉", g, txt: `<b>${g.nombre}</b> ha bajado de ${ppms[ppms.length - 2]} a ${ppms[ppms.length - 1]} PPM.`, sesion: g.ultima });
+    else if (dias >= 14)
+      alertas.push({ pri: 2, icono: "🕑", g, txt: `<b>${g.nombre}</b> no lee desde hace ${dias} días.`, sesion: null });
+    else if (sinVerif && g.sesiones.length)
+      alertas.push({ pri: 3, icono: "✔️", g, txt: `<b>${g.nombre}</b> tiene lecturas sin verificar.`, sesion: g.sesiones.filter(s => s.estado !== "verificada").slice(-1)[0] });
+  });
+  alertas.sort((a, b) => a.pri - b.pri);
+
+  const cont = document.getElementById("lista-alertas");
+  if (!alertas.length) {
+    cont.innerHTML = grupos.some(g => g.ultima)
+      ? "<div class='empty'>👍 Todos los alumnos van al día.</div>"
+      : "<div class='empty'>No hay sesiones todavía</div>";
+    return;
+  }
+  cont.innerHTML = alertas.slice(0, 6).map(a => `
+    <div class="alerta-fila">
+      <span class="alerta-icono">${a.icono}</span>
+      <span class="alerta-texto">${a.txt}</span>
+      ${a.sesion
+        ? `<button class="btn-pdf" onclick="window.location.href='verificar.html?sesion=${a.sesion.id}'">Revisar</button>`
+        : a.g.id ? `<button class="btn-leer" onclick="irALectura('${a.g.id}', '${a.g.nombre.replace(/'/g, "\\'")}', '${a.g.curso}')">▶ Leer</button>` : ""}
+    </div>`).join("");
+}
+
+// ─── Errores acumulados (los 7 tipos) ────────────────────────────────────────
+function renderErrores(sesiones) {
+  const cont = document.getElementById("lista-errores");
+  if (!sesiones.length) { cont.innerHTML = "<div class='empty'>No hay datos todavía</div>"; return; }
+  const tipos = InformeLectorIA.TIPOS_ERROR.map(t => ({
+    ...t, val: sesiones.reduce((s, r) => s + (r[t.key] || 0), 0)
+  }));
+  const total = tipos.reduce((s, t) => s + t.val, 0) || 1;
+  cont.innerHTML = tipos.map(e => `
     <div class="error-fila">
       <span>${e.label}</span>
       <div style="display:flex;align-items:center;gap:8px;">
-        <div class="barra-wrap"><div class="barra-fill" style="width:${Math.round((e.val/tTotal)*100)}%;background:${e.color}"></div></div>
+        <div class="barra-wrap"><div class="barra-fill" style="width:${Math.round((e.val / total) * 100)}%;background:${e.hex}"></div></div>
         <span style="font-size:12px;color:#9ca3af;min-width:20px;text-align:right">${e.val}</span>
       </div>
     </div>`).join("");
 }
 
-function generarPDF(nombreAlumno) {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
-  const sesiones = todosLosDatos.filter(r => r.alumno_nombre === nombreAlumno);
-  const ultima = sesiones[sesiones.length - 1];
-  const fecha = new Date().toLocaleDateString("es-ES");
-  const objetivo = 90;
-  const estado = ultima.ppm >= objetivo ? "En nivel" : ultima.ppm >= 70 ? "Cerca del nivel" : "Necesita apoyo";
-  const recomendacion = ultima.ppm >= objetivo
-    ? "El alumno ha alcanzado el nivel esperado. Se recomienda mantener la práctica diaria y avanzar a textos de mayor complejidad."
-    : ultima.ppm >= 70
-    ? "El alumno está cerca del objetivo. Se recomienda práctica diaria de 10 minutos con lecturas de su nivel actual."
-    : "El alumno necesita apoyo adicional. Se recomienda sesiones de lectura guiada y revisión con el orientador educativo.";
+// ─── Gráfica de evolución (media de clase o un alumno concreto) ──────────────
+function poblarFiltro() {
+  const sel = document.getElementById("filtro-alumno");
+  sel.innerHTML = `<option value="">Media de la clase</option>` +
+    grupos.filter(g => g.sesiones.length).sort((a, b) => a.nombre.localeCompare(b.nombre))
+      .map(g => `<option value="${g.id || "n:" + g.nombre}">${g.nombre}</option>`).join("");
+}
 
-  doc.setFillColor(29, 158, 117);
-  doc.rect(0, 0, 210, 28, "F");
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(18); doc.setFont("helvetica", "bold");
-  doc.text("LectorIA", 14, 12);
-  doc.setFontSize(11); doc.setFont("helvetica", "normal");
-  doc.text("Informe de velocidad lectora", 14, 21);
-  doc.text(fecha, 196, 21, { align: "right" });
-  doc.setTextColor(17, 17, 17);
-  doc.setFontSize(16); doc.setFont("helvetica", "bold");
-  doc.text(nombreAlumno, 14, 42);
-  doc.setFontSize(11); doc.setFont("helvetica", "normal");
-  doc.setTextColor(107, 114, 128);
-  doc.text(`${sesiones.length} sesión(es) completada(s)`, 14, 50);
-  doc.setFillColor(249, 250, 251);
-  doc.roundedRect(14, 58, 85, 30, 3, 3, "F");
-  doc.roundedRect(111, 58, 85, 30, 3, 3, "F");
-  doc.setTextColor(107, 114, 128); doc.setFontSize(9);
-  doc.text("PPM ACTUAL", 20, 66);
-  doc.text("OBJETIVO CURSO", 117, 66);
-  doc.setTextColor(17, 17, 17); doc.setFontSize(24); doc.setFont("helvetica", "bold");
-  doc.text(String(ultima.ppm), 20, 82);
-  doc.text(String(objetivo), 117, 82);
-  doc.setFontSize(10); doc.setFont("helvetica", "normal");
-  const estadoColor = ultima.ppm >= objetivo ? [15, 110, 86] : ultima.ppm >= 70 ? [133, 77, 14] : [121, 31, 31];
-  doc.setTextColor(...estadoColor);
-  doc.text(`Estado: ${estado}`, 14, 100);
-  doc.setDrawColor(229, 231, 235); doc.line(14, 106, 196, 106);
-  doc.setTextColor(17, 17, 17); doc.setFontSize(12); doc.setFont("helvetica", "bold");
-  doc.text("Detalle de errores", 14, 116);
-  [
-    { label: "Omisiones", valor: ultima.omisiones },
-    { label: "Sustituciones", valor: ultima.sustituciones },
-    { label: "Repeticiones", valor: ultima.repeticiones },
-    { label: "Vacilaciones", valor: ultima.vacilaciones || 0 }
-  ].forEach((e, i) => {
-    const y = 126 + i * 12;
-    doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(55, 65, 81);
-    doc.text(e.label, 14, y);
-    doc.setTextColor(17, 17, 17); doc.setFont("helvetica", "bold");
-    doc.text(String(e.valor), 80, y);
+function dibujarEvolucion() {
+  const val = document.getElementById("filtro-alumno").value;
+  let labels, datos, objetivo, titulos;
+
+  if (val) {
+    const g = grupos.find(x => (x.id || "n:" + x.nombre) === val);
+    if (!g) return;
+    labels = g.sesiones.map(s => fmtFecha(s.fecha));
+    datos = g.sesiones.map(s => s.ppm);
+    titulos = g.sesiones.map(s => s.texto_titulo || s.texto_id || "Lectura");
+    objetivo = g.objetivo;
+  } else {
+    // Media de clase por día: promedia las sesiones de cada fecha
+    const activos = grupos.filter(g => g.ultima);
+    const porDia = {};
+    activos.forEach(g => g.sesiones.forEach(s => {
+      const d = new Date(s.fecha); d.setHours(0, 0, 0, 0);
+      const k = d.getTime();
+      (porDia[k] = porDia[k] || []).push(s.ppm);
+    }));
+    const dias = Object.keys(porDia).map(Number).sort((a, b) => a - b);
+    labels = dias.map(d => fmtFecha(d));
+    datos = dias.map(d => Math.round(media(porDia[d])));
+    titulos = dias.map(d => "Media del día");
+    objetivo = activos.length ? Math.round(media(activos.map(g => g.objetivo))) : 90;
+  }
+
+  const ctx = document.getElementById("chartPPM");
+  if (chartEvol) chartEvol.destroy();
+  if (!datos.length) { return; }
+
+  chartEvol = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels,
+      datasets: [{
+        data: datos,
+        borderColor: "#1D9E75",
+        backgroundColor: "rgba(29,158,117,0.08)",
+        borderWidth: 2,
+        pointRadius: datos.length > 20 ? 2 : 4,
+        pointBackgroundColor: datos.map(p => estadoDe(p, objetivo).color),
+        fill: true,
+        tension: 0.3
+      }, {
+        data: Array(labels.length).fill(objetivo),
+        borderColor: "#d1d5db",
+        borderWidth: 1.5,
+        borderDash: [5, 4],
+        pointRadius: 0,
+        pointHitRadius: 0,
+        fill: false
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          filter: item => item.datasetIndex === 0,
+          callbacks: {
+            title: items => items.length ? titulos[items[0].dataIndex] : "",
+            label: item => ` ${item.parsed.y} PPM · ${labels[item.dataIndex]} (obj. ${objetivo})`
+          }
+        }
+      },
+      scales: {
+        y: {
+          min: Math.max(0, Math.min(...datos, objetivo) - 15),
+          suggestedMax: Math.max(...datos, objetivo) + 10,
+          ticks: { font: { size: 11 }, color: "#9ca3af" }, grid: { color: "rgba(0,0,0,0.04)" }
+        },
+        x: { ticks: { font: { size: 11 }, color: "#9ca3af", maxTicksLimit: 10 }, grid: { display: false } }
+      }
+    }
   });
-  doc.setFont("helvetica", "normal");
-  doc.setFillColor(240, 253, 244);
-  doc.roundedRect(14, 178, 182, 28, 3, 3, "F");
-  doc.setTextColor(15, 110, 86); doc.setFontSize(10); doc.setFont("helvetica", "bold");
-  doc.text("Recomendación", 20, 188);
-  doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-  doc.text(doc.splitTextToSize(recomendacion, 170), 20, 196);
-  doc.setTextColor(156, 163, 175); doc.setFontSize(8);
-  doc.text("Generado por LectorIA · Plataforma de estimulación lectora", 105, 285, { align: "center" });
-  doc.save(`informe_${nombreAlumno.replace(/ /g,"_")}_${fecha.replace(/\//g,"-")}.pdf`);
 }
 
 init();

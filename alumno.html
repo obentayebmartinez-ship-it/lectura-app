@@ -6,6 +6,7 @@
   <title>LectorIA — Historial</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
+  <script src="informe.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
@@ -24,14 +25,18 @@
     .badge-ok { background: #E1F5EE; color: #0F6E56; }
     .badge-warn { background: #FAEEDA; color: #633806; }
     .badge-bad { background: #FCEBEB; color: #791F1F; }
-    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 1.25rem; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 1.25rem; }
     .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 1.25rem; }
     .card { background: #fff; border: 0.5px solid #e5e7eb; border-radius: 14px; padding: 1.25rem; }
     .metric-label { font-size: 11px; color: #6b7280; margin-bottom: 4px; }
     .metric-value { font-size: 26px; font-weight: 500; color: #111; }
     .metric-sub { font-size: 11px; color: #9ca3af; margin-top: 2px; }
+    .sub-ok { color: #0F6E56; } .sub-bad { color: #791F1F; }
+    .progreso-wrap { background: #f3f4f6; border-radius: 4px; height: 6px; margin-top: 8px; overflow: hidden; }
+    .progreso-fill { height: 100%; border-radius: 4px; background: #1D9E75; transition: width .4s; }
     .card-title { font-size: 14px; font-weight: 500; color: #111; margin-bottom: 1rem; }
-    .sesion-fila { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 0.5px solid #f3f4f6; }
+    .card-title small { font-size: 11px; font-weight: 400; color: #9ca3af; }
+    .sesion-fila { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 0.5px solid #f3f4f6; flex-wrap: wrap; }
     .sesion-fila:last-child { border-bottom: none; }
     .sesion-titulo { font-size: 13px; font-weight: 500; color: #111; }
     .sesion-meta { font-size: 11px; color: #9ca3af; margin-top: 2px; }
@@ -40,16 +45,33 @@
     .ppm-ok { background: #E1F5EE; color: #0F6E56; }
     .ppm-warn { background: #FAEEDA; color: #633806; }
     .ppm-bad { background: #FCEBEB; color: #791F1F; }
-    .errores-mini { display: flex; gap: 6px; }
-    .err-tag { font-size: 10px; padding: 2px 6px; border-radius: 4px; }
-    .err-o { background: #FCEBEB; color: #791F1F; }
-    .err-s { background: #FAEEDA; color: #633806; }
-    .err-r { background: #EEEDFE; color: #3C3489; }
+    .errores-mini { display: flex; gap: 5px; flex-wrap: wrap; }
+    .err-tag { font-size: 10px; padding: 2px 6px; border-radius: 4px; background: #f3f4f6; color: #6b7280; }
+    .leyenda { display: flex; gap: 10px; margin-top: 8px; font-size: 11px; color: #6b7280; flex-wrap: wrap; }
+    .ley-item { display: flex; align-items: center; gap: 4px; }
+    .ley-dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; flex-shrink: 0; }
+    /* Hoja de registro (solo lectura) */
+    .grupo { margin-bottom: 0.9rem; }
+    .grupo:last-child { margin-bottom: 0; }
+    .grupo-nombre { font-size: 11px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+    .dim-fila { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 0.5px solid #f3f4f6; }
+    .dim-fila:last-child { border-bottom: none; }
+    .dim-label { font-size: 13px; color: #111; display: flex; align-items: center; gap: 6px; }
+    .dim-trend { font-size: 10px; font-weight: 600; }
+    .trend-mejora { color: #0F6E56; } .trend-empeora { color: #791F1F; }
+    .niveles { display: flex; gap: 4px; }
+    .nivel { width: 30px; text-align: center; font-size: 11px; padding: 3px 0; border-radius: 8px; border: 0.5px solid #e5e7eb; background: #fff; color: #d1d5db; }
+    .nivel.activo-1 { border-color: #1D9E75; background: #E1F5EE; color: #0F6E56; font-weight: 600; }
+    .nivel.activo-2 { border-color: #EF9F27; background: #FAEEDA; color: #633806; font-weight: 600; }
+    .nivel.activo-3 { border-color: #E24B4A; background: #FCEBEB; color: #791F1F; font-weight: 600; }
+    .nivel.activo-pos-1 { border-color: #E24B4A; background: #FCEBEB; color: #791F1F; font-weight: 600; }
+    .nivel.activo-pos-2 { border-color: #EF9F27; background: #FAEEDA; color: #633806; font-weight: 600; }
+    .nivel.activo-pos-3 { border-color: #1D9E75; background: #E1F5EE; color: #0F6E56; font-weight: 600; }
     .btn-pdf { font-size: 12px; padding: 8px 16px; border-radius: 8px; border: 0.5px solid #e5e7eb; background: #fff; color: #374151; cursor: pointer; margin-top: 1rem; display: inline-flex; align-items: center; gap: 6px; }
+    .btn-mini { font-size: 11px; padding: 5px 10px; border-radius: 8px; border: 0.5px solid #e5e7eb; background: #fff; color: #374151; cursor: pointer; }
     .loading { text-align: center; color: #9ca3af; font-size: 13px; padding: 2rem; }
-    .objetivo-line { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #9ca3af; margin-top: 8px; }
-    .objetivo-dash { width: 16px; border-top: 2px dashed #d1d5db; }
-    @media (max-width: 600px) { .grid-3 { grid-template-columns: 1fr 1fr; } .grid-2 { grid-template-columns: 1fr; } }
+    .nota { font-size: 11px; color: #9ca3af; margin-top: 0.75rem; line-height: 1.5; }
+    @media (max-width: 700px) { .grid-4 { grid-template-columns: 1fr 1fr; } .grid-2 { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -63,21 +85,27 @@
   <div class="loading">Cargando...</div>
 </div>
 
-<div class="grid-3">
+<div class="grid-4">
   <div class="card">
     <div class="metric-label">PPM actual</div>
     <div class="metric-value" id="ppm-actual">—</div>
-    <div class="metric-sub">última sesión</div>
+    <div class="metric-sub" id="ppm-tendencia">última sesión</div>
   </div>
   <div class="card">
     <div class="metric-label">Objetivo del curso</div>
     <div class="metric-value" id="ppm-objetivo">—</div>
-    <div class="metric-sub">palabras por minuto</div>
+    <div class="metric-sub" id="objetivo-pct">palabras por minuto</div>
+    <div class="progreso-wrap"><div class="progreso-fill" id="objetivo-barra" style="width:0%"></div></div>
+  </div>
+  <div class="card">
+    <div class="metric-label">Precisión media</div>
+    <div class="metric-value" id="prec-media">—</div>
+    <div class="metric-sub" id="prec-ultima">% de palabras correctas</div>
   </div>
   <div class="card">
     <div class="metric-label">Lecturas completadas</div>
     <div class="metric-value" id="lecturas-completadas">—</div>
-    <div class="metric-sub">de 10 lecturas</div>
+    <div class="metric-sub" id="lecturas-verificadas">&nbsp;</div>
   </div>
 </div>
 
@@ -85,17 +113,27 @@
   <div class="card">
     <div class="card-title">Evolución de velocidad lectora</div>
     <canvas id="chartPPM" height="200"></canvas>
-    <div class="objetivo-line"><div class="objetivo-dash"></div>Objetivo del curso</div>
+    <div class="leyenda">
+      <span class="ley-item"><span class="ley-dot" style="background:#1D9E75"></span>En nivel</span>
+      <span class="ley-item"><span class="ley-dot" style="background:#EF9F27"></span>Cerca</span>
+      <span class="ley-item"><span class="ley-dot" style="background:#E24B4A"></span>Necesita apoyo</span>
+      <span class="ley-item"><span style="width:16px;border-top:2px dashed #d1d5db;display:inline-block"></span>Objetivo del curso</span>
+    </div>
   </div>
   <div class="card">
     <div class="card-title">Errores por lectura</div>
     <canvas id="chartErrores" height="200"></canvas>
-    <div style="display:flex;gap:12px;margin-top:8px;font-size:11px;color:#6b7280;">
-      <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#F09595;display:inline-block"></span>Omisiones</span>
-      <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#EF9F27;display:inline-block"></span>Sustituciones</span>
-      <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#AFA9EC;display:inline-block"></span>Repeticiones</span>
-    </div>
+    <div class="leyenda" id="leyenda-errores"></div>
   </div>
+</div>
+
+<div class="card" id="card-registro" style="display:none;margin-bottom:1.25rem;">
+  <div class="card-title">📋 Hoja de registro <small id="registro-fecha"></small></div>
+  <div class="grid-2" style="margin-bottom:0">
+    <div id="registro-col-1"></div>
+    <div id="registro-col-2"></div>
+  </div>
+  <div class="nota" id="registro-nota"></div>
 </div>
 
 <div class="card" style="margin-bottom:1.25rem;">
@@ -125,13 +163,45 @@ const TEXTOS = {
   "agua-2p": "El agua"
 };
 
+// Hoja de registro: mismas dimensiones que verificar.html (solo lectura aquí)
+const DIMENSIONES = [
+  { grupo: "Fluidez lectora", col: 1, items: [
+    { key: "silabeo",           label: "Silabeo" },
+    { key: "pausas_entonacion", label: "Pausas y entonación", positivo: true },
+    { key: "vacilacion",        label: "Vacilación" },
+    { key: "rectificacion",     label: "Rectificación" },
+    { key: "repeticion",        label: "Repetición" },
+    { key: "velocidad",         label: "Velocidad", positivo: true }
+  ]},
+  { grupo: "Exactitud lectora", col: 2, items: [
+    { key: "sustitucion", label: "Sustitución" },
+    { key: "omisiones",   label: "Omisiones" },
+    { key: "inversion",   label: "Inversión" },
+    { key: "adicion",     label: "Adición" },
+    { key: "rotacion",    label: "Rotación (b/d, p/q)" }
+  ]},
+  { grupo: "Comprensión y expresión", col: 2, items: [
+    { key: "comprension", label: "Comprensión lectora", positivo: true }
+  ]}
+];
+
 const params = new URLSearchParams(window.location.search);
+const DEMO = params.get("demo") === "1";
 const alumnoIdParam = params.get("id") || "";
 let alumnoNombre = params.get("alumno") || "";
 let alumnoCurso = params.get("curso") || "2P";
 let todasLasSesiones = [];
 
+const fmtFecha = f => new Date(f).toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit" });
+const fmtDur = seg => {
+  if (!seg) return null;
+  const m = Math.floor(seg / 60), s = seg % 60;
+  return m > 0 ? `${m} min ${String(s).padStart(2, "0")} s` : `${s} s`;
+};
+
 async function init() {
+  if (DEMO) { const d = cargarDemo(); render(d); return; }
+
   const { data } = await sb.auth.getSession();
   if (!data.session) { window.location.href = "login.html"; return; }
 
@@ -143,15 +213,21 @@ async function init() {
     alumnoCurso = al.curso;
   }
 
-  const iniciales = alumnoNombre.split(" ").map(n => n[0]).filter(Boolean).join("").substring(0,2).toUpperCase();
-  const objetivo = OBJETIVOS[alumnoCurso] || 90;
-  document.getElementById("ppm-objetivo").textContent = objetivo;
-
   let consulta = sb.from("sesiones").select("*").order("fecha", { ascending: true });
   consulta = alumnoIdParam ? consulta.eq("alumno_id", alumnoIdParam) : consulta.eq("alumno_nombre", alumnoNombre);
   const { data: sesiones } = await consulta;
+  render(sesiones || []);
+}
 
-  if (!sesiones || sesiones.length === 0) {
+function render(sesiones) {
+  const iniciales = alumnoNombre.split(" ").map(n => n[0]).filter(Boolean).join("").substring(0, 2).toUpperCase();
+  const objetivo = OBJETIVOS[alumnoCurso] || 90;
+  document.getElementById("ppm-objetivo").textContent = objetivo;
+
+  const sesionesValidas = (sesiones || []).filter(s => s.ppm && s.ppm > 0);
+  todasLasSesiones = sesionesValidas;
+
+  if (sesionesValidas.length === 0) {
     document.getElementById("alumno-hero").innerHTML = `
       <div class="avatar">${iniciales}</div>
       <div><div class="alumno-nombre">${alumnoNombre}</div>
@@ -160,32 +236,50 @@ async function init() {
     return;
   }
 
-  const sesionesValidas = sesiones.filter(s => s.ppm && s.ppm > 0);
-  todasLasSesiones = sesionesValidas;
-
-  if (sesionesValidas.length === 0) {
-    document.getElementById("lista-sesiones").innerHTML = "<div class='loading'>No hay datos válidos todavía</div>";
-    return;
-  }
-
+  const ppms = sesionesValidas.map(s => s.ppm);
   const ultima = sesionesValidas[sesionesValidas.length - 1];
+  const anterior = sesionesValidas[sesionesValidas.length - 2];
   const ppmActual = ultima.ppm;
+  const mejorMarca = Math.max(...ppms);
   const badge = ppmActual >= objetivo ? "badge-ok" : ppmActual >= objetivo * 0.8 ? "badge-warn" : "badge-bad";
   const estado = ppmActual >= objetivo ? "En nivel" : ppmActual >= objetivo * 0.8 ? "Cerca" : "Necesita apoyo";
+  const verificadas = sesionesValidas.filter(s => s.estado === "verificada");
 
   document.getElementById("alumno-hero").innerHTML = `
     <div class="avatar">${iniciales}</div>
     <div>
       <div class="alumno-nombre">${alumnoNombre}</div>
-      <div class="alumno-meta">${alumnoCurso} · ${sesionesValidas.length} lectura(s) completada(s)</div>
+      <div class="alumno-meta">${alumnoCurso} · ${sesionesValidas.length} lectura(s) · mejor marca ${mejorMarca} PPM · última el ${fmtFecha(ultima.fecha)}</div>
     </div>
     <span class="badge ${badge}">${estado}</span>`;
 
+  // ── Tarjetas de métricas ──
   document.getElementById("ppm-actual").textContent = ppmActual;
-  document.getElementById("lecturas-completadas").textContent = sesionesValidas.length;
+  if (anterior) {
+    const delta = ppmActual - anterior.ppm;
+    const el = document.getElementById("ppm-tendencia");
+    el.textContent = delta === 0 ? "igual que la sesión anterior"
+      : `${delta > 0 ? "▲ +" : "▼ "}${delta} PPM vs anterior`;
+    el.className = "metric-sub " + (delta > 0 ? "sub-ok" : delta < 0 ? "sub-bad" : "");
+  }
+  const pct = Math.round((ppmActual / objetivo) * 100);
+  document.getElementById("objetivo-pct").textContent = pct + "% alcanzado";
+  document.getElementById("objetivo-barra").style.width = Math.min(100, pct) + "%";
+  document.getElementById("objetivo-barra").style.background = pct >= 100 ? "#1D9E75" : pct >= 80 ? "#EF9F27" : "#E24B4A";
 
-  const labels = sesionesValidas.map((s, i) => "L" + (i + 1));
-  const ppms = sesionesValidas.map(s => s.ppm);
+  const precisiones = sesionesValidas.filter(s => s.precision != null).map(s => s.precision);
+  if (precisiones.length) {
+    document.getElementById("prec-media").textContent = Math.round(precisiones.reduce((a, b) => a + b, 0) / precisiones.length) + "%";
+    document.getElementById("prec-ultima").textContent = "última: " + (ultima.precision != null ? ultima.precision + "%" : "—");
+  }
+
+  document.getElementById("lecturas-completadas").textContent = sesionesValidas.length;
+  document.getElementById("lecturas-verificadas").textContent = verificadas.length
+    ? `${verificadas.length} verificada(s) por el docente` : "ninguna verificada todavía";
+
+  // ── Gráfica de velocidad ──
+  const labels = sesionesValidas.map(s => fmtFecha(s.fecha));
+  const titulos = sesionesValidas.map((s, i) => s.texto_titulo || TEXTOS[s.texto_id] || "Lectura " + (i + 1));
 
   new Chart(document.getElementById("chartPPM"), {
     type: "line",
@@ -206,131 +300,167 @@ async function init() {
         borderWidth: 1.5,
         borderDash: [5, 4],
         pointRadius: 0,
+        pointHitRadius: 0,
         fill: false
       }]
     },
     options: {
       responsive: true,
-      plugins: { legend: { display: false } },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          filter: item => item.datasetIndex === 0,
+          callbacks: {
+            title: items => items.length ? titulos[items[0].dataIndex] : "",
+            label: item => ` ${item.parsed.y} PPM · ${labels[item.dataIndex]}`
+          }
+        }
+      },
       scales: {
-        y: { min: Math.max(0, Math.min(...ppms) - 15), ticks: { font: { size: 11 }, color: "#9ca3af" }, grid: { color: "rgba(0,0,0,0.04)" } },
-        x: { ticks: { font: { size: 11 }, color: "#9ca3af" }, grid: { display: false } }
+        y: { min: Math.max(0, Math.min(...ppms, objetivo) - 15), ticks: { font: { size: 11 }, color: "#9ca3af" }, grid: { color: "rgba(0,0,0,0.04)" } },
+        x: { ticks: { font: { size: 11 }, color: "#9ca3af", maxTicksLimit: 10 }, grid: { display: false } }
       }
     }
   });
 
+  // ── Gráfica de errores (los 7 tipos, apilados) ──
+  const tiposError = InformeLectorIA.TIPOS_ERROR;
   new Chart(document.getElementById("chartErrores"), {
     type: "bar",
     data: {
       labels,
-      datasets: [
-        { label: "Omisiones", data: sesionesValidas.map(s => s.omisiones || 0), backgroundColor: "#F09595", borderRadius: 4 },
-        { label: "Sustituciones", data: sesionesValidas.map(s => s.sustituciones || 0), backgroundColor: "#EF9F27", borderRadius: 4 },
-        { label: "Repeticiones", data: sesionesValidas.map(s => s.repeticiones || 0), backgroundColor: "#AFA9EC", borderRadius: 4 }
-      ]
+      datasets: tiposError.map(t => ({
+        label: t.label,
+        data: sesionesValidas.map(s => s[t.key] || 0),
+        backgroundColor: t.hex,
+        borderRadius: 2
+      }))
     },
     options: {
       responsive: true,
-      plugins: { legend: { display: false } },
+      plugins: {
+        legend: { display: false },
+        tooltip: { filter: item => item.parsed.y > 0, callbacks: { title: items => items.length ? titulos[items[0].dataIndex] : "" } }
+      },
       scales: {
-        y: { ticks: { font: { size: 11 }, color: "#9ca3af", stepSize: 1 }, grid: { color: "rgba(0,0,0,0.04)" } },
-        x: { ticks: { font: { size: 11 }, color: "#9ca3af" }, grid: { display: false } }
+        y: { stacked: true, ticks: { font: { size: 11 }, color: "#9ca3af", stepSize: 1 }, grid: { color: "rgba(0,0,0,0.04)" } },
+        x: { stacked: true, ticks: { font: { size: 11 }, color: "#9ca3af", maxTicksLimit: 10 }, grid: { display: false } }
       }
     }
   });
+  document.getElementById("leyenda-errores").innerHTML = tiposError.map(t =>
+    `<span class="ley-item"><span class="ley-dot" style="background:${t.hex}"></span>${t.label}</span>`).join("");
 
-  document.getElementById("lista-sesiones").innerHTML = sesionesValidas.map((s, i) => {
-    const titulo = s.texto_titulo || TEXTOS[s.texto_id] || "Lectura " + (i + 1);
-    const fecha = new Date(s.fecha).toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit" });
+  // ── Hoja de registro (última verificación del docente) ──
+  const conNiveles = verificadas.filter(s => s.niveles && Object.keys(s.niveles).length);
+  if (conNiveles.length) {
+    renderRegistro(conNiveles[conNiveles.length - 1], conNiveles[conNiveles.length - 2]);
+  }
+
+  // ── Historial (más reciente primero) ──
+  document.getElementById("lista-sesiones").innerHTML = sesionesValidas.slice().reverse().map(s => {
+    const i = sesionesValidas.indexOf(s);
+    const titulo = titulos[i];
     const chip = s.ppm >= objetivo ? "ppm-ok" : s.ppm >= objetivo * 0.8 ? "ppm-warn" : "ppm-bad";
     const verificada = s.estado === "verificada";
+    const dur = fmtDur(s.duracion_segundos);
+    const meta = [
+      new Date(s.fecha).toLocaleDateString("es-ES", { day: "2-digit", month: "short" }),
+      s.precision != null ? s.precision + "% precisión" : null,
+      dur,
+      s.prosody ? "entonación " + s.prosody : null,
+      verificada ? "✓ verificada" : null
+    ].filter(Boolean).join(" · ");
+    const tags = tiposError.filter(t => (s[t.key] || 0) > 0)
+      .map(t => `<span class="err-tag" style="background:${t.hex}22;color:#374151">${s[t.key]} ${t.corto.toLowerCase()}</span>`).join("");
     return `
       <div class="sesion-fila">
         <div>
-          <div class="sesion-titulo">L${i+1}. ${titulo}</div>
-          <div class="sesion-meta">${fecha} · ${s.precision}% precisión${verificada ? " · ✓ verificada" : ""}</div>
+          <div class="sesion-titulo">${titulo}</div>
+          <div class="sesion-meta">${meta}</div>
         </div>
         <div class="sesion-derecha">
-          <div class="errores-mini">
-            <span class="err-tag err-o">${s.omisiones || 0} om</span>
-            <span class="err-tag err-s">${s.sustituciones || 0} st</span>
-            <span class="err-tag err-r">${s.repeticiones || 0} rep</span>
-          </div>
+          <div class="errores-mini">${tags || "<span class='err-tag'>sin errores</span>"}</div>
           <span class="ppm-chip ${chip}">${s.ppm} PPM</span>
-          <button class="btn-pdf" style="margin:0" onclick="window.location.href='verificar.html?sesion=${s.id}'">${verificada ? "✓" : "✔ Revisar"}</button>
+          <button class="btn-mini" onclick="window.location.href='verificar.html?sesion=${s.id}'">${verificada ? "✓" : "✔ Revisar"}</button>
         </div>
       </div>`;
   }).join("");
 }
 
-function generarPDF() {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
-  const objetivo = OBJETIVOS[alumnoCurso] || 90;
-  const ultima = todasLasSesiones[todasLasSesiones.length - 1];
-  const fecha = new Date().toLocaleDateString("es-ES");
-  const estado = ultima.ppm >= objetivo ? "En nivel" : ultima.ppm >= objetivo * 0.8 ? "Cerca del nivel" : "Necesita apoyo";
-  const recomendacion = ultima.ppm >= objetivo
-    ? "El alumno ha alcanzado el nivel esperado. Se recomienda mantener la práctica y avanzar a textos de mayor complejidad."
-    : ultima.ppm >= objetivo * 0.8
-    ? "El alumno está cerca del objetivo. Se recomienda práctica diaria de 10 minutos."
-    : "El alumno necesita apoyo adicional. Se recomienda sesiones guiadas con el orientador educativo.";
+// Hoja de registro en solo lectura, con flecha de evolución respecto a la
+// verificación anterior (mejora = menos dificultad, o más nivel si es positiva)
+function renderRegistro(sesion, previa) {
+  document.getElementById("card-registro").style.display = "block";
+  document.getElementById("registro-fecha").textContent =
+    `verificada el ${fmtFecha(sesion.fecha)} · 1 bajo · 2 medio · 3 alto`;
 
-  doc.setFillColor(29, 158, 117);
-  doc.rect(0, 0, 210, 28, "F");
-  doc.setTextColor(255,255,255);
-  doc.setFontSize(18); doc.setFont("helvetica","bold");
-  doc.text("LectorIA", 14, 12);
-  doc.setFontSize(11); doc.setFont("helvetica","normal");
-  doc.text("Informe de progreso lector", 14, 21);
-  doc.text(fecha, 196, 21, { align: "right" });
-
-  doc.setTextColor(17,17,17);
-  doc.setFontSize(16); doc.setFont("helvetica","bold");
-  doc.text(alumnoNombre, 14, 42);
-  doc.setFontSize(11); doc.setFont("helvetica","normal");
-  doc.setTextColor(107,114,128);
-  doc.text(`${alumnoCurso} · ${todasLasSesiones.length} lectura(s) · Estado: ${estado}`, 14, 50);
-
-  doc.setFillColor(249,250,251);
-  doc.roundedRect(14, 56, 55, 26, 3, 3, "F");
-  doc.roundedRect(76, 56, 55, 26, 3, 3, "F");
-  doc.roundedRect(138, 56, 58, 26, 3, 3, "F");
-  doc.setTextColor(107,114,128); doc.setFontSize(8);
-  doc.text("PPM ACTUAL", 18, 63); doc.text("OBJETIVO", 80, 63); doc.text("ESTADO", 142, 63);
-  doc.setTextColor(17,17,17); doc.setFontSize(18); doc.setFont("helvetica","bold");
-  doc.text(String(ultima.ppm), 18, 76); doc.text(String(objetivo), 80, 76);
-  doc.setFontSize(10); doc.text(estado, 142, 74);
-
-  doc.setDrawColor(229,231,235); doc.line(14, 90, 196, 90);
-  doc.setTextColor(17,17,17); doc.setFontSize(11); doc.setFont("helvetica","bold");
-  doc.text("Historial de lecturas", 14, 100);
-  doc.setFontSize(8); doc.setFont("helvetica","normal"); doc.setTextColor(107,114,128);
-  doc.text("Lectura", 14, 108); doc.text("PPM", 110, 108);
-  doc.text("Omis.", 130, 108); doc.text("Sust.", 150, 108); doc.text("Rep.", 170, 108);
-
-  todasLasSesiones.forEach((s, i) => {
-    const y = 116 + i * 9;
-    const titulo = TEXTOS[s.texto_id] || "Lectura " + (i+1);
-    doc.setTextColor(55,65,81); doc.setFontSize(9);
-    doc.text(`L${i+1}. ${titulo.substring(0,28)}`, 14, y);
-    doc.text(String(s.ppm), 110, y);
-    doc.text(String(s.omisiones||0), 130, y);
-    doc.text(String(s.sustituciones||0), 150, y);
-    doc.text(String(s.repeticiones||0), 170, y);
+  const html = { 1: "", 2: "" };
+  DIMENSIONES.forEach(g => {
+    html[g.col] += `<div class="grupo"><div class="grupo-nombre">${g.grupo}</div>` +
+      g.items.map(d => {
+        const val = sesion.niveles[d.key] || null;
+        let trend = "";
+        if (previa && previa.niveles && previa.niveles[d.key] && val) {
+          const delta = val - previa.niveles[d.key];
+          if (delta !== 0) {
+            const mejora = d.positivo ? delta > 0 : delta < 0;
+            trend = `<span class="dim-trend ${mejora ? "trend-mejora" : "trend-empeora"}">${mejora ? "▲ mejora" : "▼"}</span>`;
+          }
+        }
+        return `
+        <div class="dim-fila">
+          <div class="dim-label">${d.label}${trend}</div>
+          <div class="niveles">
+            ${[1, 2, 3].map(n => {
+              const activo = val === n ? (d.positivo ? `activo-pos-${n}` : `activo-${n}`) : "";
+              return `<span class="nivel ${activo}">${n}</span>`;
+            }).join("")}
+          </div>
+        </div>`;
+      }).join("") + `</div>`;
   });
+  document.getElementById("registro-col-1").innerHTML = html[1];
+  document.getElementById("registro-col-2").innerHTML = html[2];
+  document.getElementById("registro-nota").textContent = previa
+    ? `Comparado con la verificación anterior (${fmtFecha(previa.fecha)}).`
+    : "Primera sesión verificada por el docente.";
+}
 
-  const yRec = 120 + todasLasSesiones.length * 9;
-  doc.setFillColor(240,253,244);
-  doc.roundedRect(14, yRec, 182, 26, 3, 3, "F");
-  doc.setTextColor(15,110,86); doc.setFontSize(9); doc.setFont("helvetica","bold");
-  doc.text("Recomendación", 20, yRec + 9);
-  doc.setFont("helvetica","normal"); doc.setFontSize(8);
-  doc.text(doc.splitTextToSize(recomendacion, 170), 20, yRec + 17);
+function generarPDF() {
+  InformeLectorIA.generar({ nombre: alumnoNombre, curso: alumnoCurso, sesiones: todasLasSesiones });
+}
 
-  doc.setTextColor(156,163,175); doc.setFontSize(7);
-  doc.text("Generado por LectorIA · Plataforma de estimulación lectora", 105, 285, { align: "center" });
-  doc.save(`informe_${alumnoNombre.replace(/ /g,"_")}_${fecha.replace(/\//g,"-")}.pdf`);
+// ─── Modo demo (?demo=1): datos ficticios para ver la pantalla sin BD ─────────
+// Quitar antes de lanzar, igual que el de verificar.html.
+function cargarDemo() {
+  alumnoNombre = "Alumno de Prueba";
+  alumnoCurso = "2P";
+  const base = [62, 68, 65, 74, 71, 79, 84, 88];
+  const dia = 24 * 3600 * 1000;
+  return base.map((ppm, i) => ({
+    id: "demo-" + i,
+    fecha: new Date(Date.now() - (base.length - i) * 6 * dia).toISOString(),
+    texto_id: "2p-0" + ((i % 8) + 1),
+    ppm,
+    precision: 86 + (i % 3) * 4,
+    fluency: 60 + i * 3,
+    prosody: 50 + i * 4,
+    omisiones: [3, 2, 3, 1, 2, 1, 0, 1][i],
+    sustituciones: [2, 2, 1, 2, 1, 1, 1, 0][i],
+    repeticiones: [1, 0, 2, 1, 0, 1, 0, 0][i],
+    vacilaciones: [2, 1, 1, 0, 1, 0, 1, 0][i],
+    rectificaciones: [0, 1, 0, 1, 0, 0, 0, 1][i],
+    adiciones: [1, 0, 0, 0, 1, 0, 0, 0][i],
+    inversiones: [0, 0, 1, 0, 0, 0, 0, 0][i],
+    duracion_segundos: 95 - i * 4,
+    estado: i === 3 || i === 6 ? "verificada" : "analizada",
+    niveles: i === 3
+      ? { silabeo: 2, pausas_entonacion: 1, vacilacion: 2, rectificacion: 1, repeticion: 2, velocidad: 1, sustitucion: 2, omisiones: 2, inversion: 1, adicion: 1, rotacion: 1, comprension: 2 }
+      : i === 6
+      ? { silabeo: 1, pausas_entonacion: 2, vacilacion: 1, rectificacion: 1, repeticion: 1, velocidad: 2, sustitucion: 1, omisiones: 1, inversion: 1, adicion: 1, rotacion: 1, comprension: 2 }
+      : null
+  }));
 }
 
 init();
