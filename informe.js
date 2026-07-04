@@ -45,19 +45,46 @@
     ]}
   ];
 
-  // Consejo pedagógico según el tipo de error más frecuente
-  const CONSEJOS = {
-    omisiones:       "Trabajar el seguimiento visual de la línea (leer señalando con el dedo o con una regla) para reducir las omisiones.",
-    sustituciones:   "Practicar la lectura pausada de palabras aisladas y pseudopalabras, prestando atención a la exactitud antes que a la velocidad.",
-    inversiones:     "Reforzar la conciencia fonológica con actividades de ordenar sílabas y sonidos dentro de la palabra.",
-    adiciones:       "Leer despacio marcando cada palabra para evitar añadir palabras que no están en el texto.",
-    repeticiones:    "Realizar lecturas repetidas del mismo texto hasta leerlo con seguridad, para ganar fluidez.",
-    rectificaciones: "Fomentar una primera lectura silenciosa del texto antes de leerlo en voz alta.",
-    vacilaciones:    "Practicar con listas de palabras de uso frecuente para ganar automatismo en el reconocimiento."
+  // Propuesta de trabajo por dimensión de la hoja de registro. Claves = las de
+  // `niveles` (ver DIMENSIONES). Se usan para generar recomendaciones concretas.
+  const CONSEJOS_TRABAJO = {
+    silabeo:           "Silabeo: leer palabras completas de un golpe de vista (barrido visual), empezando por palabras cortas y frecuentes.",
+    pausas_entonacion: "Pausas y entonación: lectura en eco (el adulto lee una frase con expresión y el alumno la repite) y respeto de los signos de puntuación.",
+    vacilacion:        "Vacilación: listas de palabras de uso frecuente para automatizar el reconocimiento y ganar seguridad.",
+    rectificacion:     "Rectificación: una primera lectura silenciosa del texto antes de leerlo en voz alta.",
+    repeticion:        "Repetición: lecturas repetidas del mismo texto hasta leerlo con soltura.",
+    velocidad:         "Velocidad: práctica diaria breve (10 min) con textos de su nivel y lecturas cronometradas para ver el progreso.",
+    sustitucion:       "Sustitución: lectura pausada de palabras aisladas y pseudopalabras, priorizando la exactitud antes que la velocidad.",
+    omisiones:         "Omisiones: seguir la línea con el dedo o una regla para no saltarse palabras.",
+    inversion:         "Inversión: conciencia fonológica — ordenar sílabas y sonidos dentro de la palabra.",
+    adicion:           "Adición: leer despacio marcando cada palabra para no añadir palabras que no están en el texto.",
+    rotacion:          "Rotación (b/d, p/q): discriminación visual de letras espejo con apoyos multisensoriales.",
+    comprension:       "Comprensión: acompañar cada lectura con 3-5 preguntas orales sobre lo leído."
   };
+  // Dimensiones donde un nivel ALTO es bueno (en el resto, alto = más dificultad)
+  const POSITIVAS = new Set(["velocidad", "pausas_entonacion", "comprension"]);
+  const ETIQUETA_DIM = {
+    silabeo: "Silabeo", pausas_entonacion: "Pausas y entonación", vacilacion: "Vacilación",
+    rectificacion: "Rectificación", repeticion: "Repetición", velocidad: "Velocidad",
+    sustitucion: "Sustitución", omisiones: "Omisiones", inversion: "Inversión",
+    adicion: "Adición", rotacion: "Rotación (b/d, p/q)", comprension: "Comprensión lectora"
+  };
+  // Mapa de los contadores de error (TIPOS_ERROR) a la clave de dimensión
+  const ERR_A_DIM = {
+    omisiones: "omisiones", sustituciones: "sustitucion", inversiones: "inversion",
+    adiciones: "adicion", repeticiones: "repeticion", rectificaciones: "rectificacion",
+    vacilaciones: "vacilacion"
+  };
+  // Gravedad de un nivel: 2 = prioritario, 1 = a vigilar, 0 = sin trabajo específico
+  function severidadNivel(key, nivel) {
+    if (!nivel) return 0;
+    return POSITIVAS.has(key) ? (nivel === 1 ? 2 : nivel === 2 ? 1 : 0)
+                              : (nivel === 3 ? 2 : nivel === 2 ? 1 : 0);
+  }
 
   const VERDE = [29, 158, 117], AMBAR = [239, 159, 39], ROJO = [226, 75, 74];
   const TINTA = [17, 17, 17], GRIS = [107, 114, 128], GRIS_CLARO = [156, 163, 175];
+  const NIVEL_ACTIVO = [223, 232, 240];   // gris-azulado neutro para el nivel marcado
 
   const media = a => a.length ? a.reduce((s, v) => s + v, 0) / a.length : 0;
   const fmtFecha = f => new Date(f).toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "2-digit" });
@@ -143,14 +170,13 @@
         const val = niveles[d.key];
         doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(55, 65, 81);
         doc.text(d.label, colX[col], yy + 3.6);
-        // Tres casillas 1·2·3, la activa coloreada según sea dimensión positiva o de dificultad
+        // Tres casillas 1·2·3. La marcada usa SIEMPRE el mismo color neutro
+        // (nunca semáforo): el nivel se interpreta con las recomendaciones, no
+        // con el color, para no alarmar a las familias.
         for (let n = 1; n <= 3; n++) {
           const bx = colX[col] + colW - (4 - n) * 9;
           const activa = val === n;
-          let c = [243, 244, 246];
-          if (activa) c = d.positivo
-            ? (n === 3 ? [225, 245, 238] : n === 2 ? [250, 238, 218] : [252, 235, 235])
-            : (n === 1 ? [225, 245, 238] : n === 2 ? [250, 238, 218] : [252, 235, 235]);
+          const c = activa ? NIVEL_ACTIVO : [243, 244, 246];
           doc.setFillColor.apply(doc, c);
           doc.roundedRect(bx, yy, 7.5, 5.5, 1.2, 1.2, "F");
           doc.setFontSize(8);
@@ -163,6 +189,22 @@
       if (yy > maxY) maxY = yy;
     });
     return maxY;
+  }
+
+  // ─── Caja de texto con título y viñetas, con salto de página propio ─────────
+  function cajaTexto(doc, y, titulo, bullets, fill, headColor) {
+    doc.setFontSize(9);
+    const lineas = [];
+    bullets.forEach(b => doc.splitTextToSize("•  " + b, 168).forEach(l => lineas.push(l)));
+    const alto = lineas.length * 4.6 + 14;
+    if (y + alto + 4 > 288) { doc.addPage(); y = 18; }
+    doc.setFillColor.apply(doc, fill);
+    doc.roundedRect(14, y, 182, alto, 3, 3, "F");
+    doc.setTextColor.apply(doc, headColor); doc.setFontSize(10); doc.setFont("helvetica", "bold");
+    doc.text(titulo, 20, y + 8);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(55, 65, 81);
+    doc.text(lineas, 20, y + 15);
+    return y + alto + 6;
   }
 
   // ─── Informe completo ───────────────────────────────────────────────────────
@@ -207,7 +249,7 @@
     doc.text(nombre, 14, 42);
     doc.setFontSize(10); doc.setFont("helvetica", "normal"); doc.setTextColor.apply(doc, GRIS);
     const periodo = ses.length > 1 ? ` · del ${fmtFecha(ses[0].fecha)} al ${fmtFecha(ultima.fecha)}` : "";
-    doc.text(`${curso} · ${ses.length} lectura(s)${periodo} · ${verificadas.length} verificada(s) por el docente`, 14, 49);
+    doc.text(`${curso} · ${ses.length} lectura(s)${periodo} · ${verificadas.length} verificada(s) por el profesional`, 14, 49);
 
     // Tarjetas de métricas
     const cajas = [
@@ -244,7 +286,7 @@
     if (ultimaVerif) {
       saltoSi(70);
       doc.setFontSize(11); doc.setFont("helvetica", "bold"); doc.setTextColor.apply(doc, TINTA);
-      doc.text("Hoja de registro (verificada por el docente)", 14, y);
+      doc.text("Hoja de registro (verificada por el profesional)", 14, y);
       doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor.apply(doc, GRIS_CLARO);
       doc.text(`sesión del ${fmtFecha(ultimaVerif.fecha)} · 1 bajo · 2 medio · 3 alto`, 196, y, { align: "right" });
       y = dibujarNiveles(doc, y + 7, ultimaVerif.niveles) + 4;
@@ -296,46 +338,44 @@
     doc.text(TIPOS_ERROR.map(t => t.corto + " = " + t.label.toLowerCase()).join(" · "), 14, y);
     y += 8;
 
-    // Observaciones y recomendaciones
-    const bullets = [];
+    // ── Observaciones: estado general y tendencia ──
+    const obs = [];
     if (tend != null) {
-      bullets.push(tend > 3
-        ? `La velocidad lectora mejora: la tendencia es de ${tend} PPM entre las primeras y las últimas lecturas.`
+      obs.push(tend > 3
+        ? `La velocidad lectora mejora: la tendencia es de +${tend} PPM entre las primeras y las últimas lecturas.`
         : tend < -3
         ? `La velocidad lectora ha descendido ${Math.abs(tend)} PPM respecto a las primeras lecturas; conviene revisar la dificultad de los textos.`
         : "La velocidad lectora se mantiene estable en las últimas lecturas.");
     }
-    bullets.push(ultima.ppm >= objetivo
+    obs.push(ultima.ppm >= objetivo
       ? "Ha alcanzado el objetivo de velocidad de su curso. Se recomienda mantener la práctica y avanzar a textos de mayor complejidad."
       : ultima.ppm >= objetivo * 0.8
       ? `Está cerca del objetivo de su curso (${objetivo} PPM). Se recomienda práctica diaria de unos 10 minutos con textos de su nivel.`
-      : "Necesita apoyo adicional para alcanzar el objetivo de su curso. Se recomiendan sesiones de lectura guiada con el orientador educativo.");
+      : "Necesita apoyo adicional para alcanzar el objetivo de su curso. Se recomiendan sesiones de lectura guiada con el profesional de referencia.");
+    y = cajaTexto(doc, y, "Observaciones", obs, [240, 253, 244], [15, 110, 86]);
 
-    // Error dominante en las últimas 5 lecturas
-    const recientes = ses.slice(-5);
-    let dominante = null, maxErr = 0;
-    TIPOS_ERROR.forEach(t => {
-      const tot = recientes.reduce((s, r) => s + (r[t.key] || 0), 0);
-      if (tot > maxErr) { maxErr = tot; dominante = t; }
-    });
-    if (dominante && maxErr >= 3) {
-      bullets.push(`El error más frecuente en las últimas lecturas es de tipo ${dominante.label.toLowerCase()} (${maxErr}). ${CONSEJOS[dominante.key]}`);
+    // ── Propuesta de trabajo: recomendaciones según lo que más le cuesta ──
+    // Prioriza la hoja de registro verificada; si no la hay, deduce el trabajo
+    // de los tipos de error de las últimas lecturas.
+    const trabajo = [];
+    if (ultimaVerif) {
+      Object.keys(ETIQUETA_DIM).forEach(k => {
+        const sev = severidadNivel(k, ultimaVerif.niveles[k]);
+        if (sev > 0 && CONSEJOS_TRABAJO[k]) trabajo.push({ sev, texto: CONSEJOS_TRABAJO[k] });
+      });
+    } else {
+      const recientes = ses.slice(-5);
+      TIPOS_ERROR.forEach(t => {
+        const tot = recientes.reduce((s, r) => s + (r[t.key] || 0), 0);
+        const dim = ERR_A_DIM[t.key];
+        if (tot >= 3 && dim) trabajo.push({ sev: tot >= 6 ? 2 : 1, texto: CONSEJOS_TRABAJO[dim] });
+      });
     }
-    if (ultimaVerif && ultimaVerif.niveles.comprension === 1) {
-      bullets.push("La comprensión lectora se valoró como baja en la última verificación: conviene acompañar cada lectura con preguntas orales sobre el texto.");
-    }
-
-    doc.setFontSize(9);
-    const lineas = [];
-    bullets.forEach(b => doc.splitTextToSize("•  " + b, 168).forEach(l => lineas.push(l)));
-    const altoCaja = lineas.length * 4.6 + 14;
-    saltoSi(altoCaja + 4);
-    doc.setFillColor(240, 253, 244);
-    doc.roundedRect(14, y, 182, altoCaja, 3, 3, "F");
-    doc.setTextColor(15, 110, 86); doc.setFontSize(10); doc.setFont("helvetica", "bold");
-    doc.text("Observaciones y recomendaciones", 20, y + 8);
-    doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-    doc.text(lineas, 20, y + 15);
+    trabajo.sort((a, b) => b.sev - a.sev);
+    const propuestas = trabajo.length
+      ? trabajo.slice(0, 5).map(t => (t.sev === 2 ? "Prioritario — " : "") + t.texto)
+      : ["No se detectan dificultades específicas: mantener la práctica lectora habitual y ampliar poco a poco la complejidad de los textos."];
+    y = cajaTexto(doc, y, "Propuesta de trabajo", propuestas, [245, 247, 250], TINTA);
 
     // Pie de página en todas las páginas
     const nPag = doc.getNumberOfPages();

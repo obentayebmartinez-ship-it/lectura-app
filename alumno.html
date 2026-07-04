@@ -61,12 +61,12 @@
     .trend-mejora { color: #0F6E56; } .trend-empeora { color: #791F1F; }
     .niveles { display: flex; gap: 4px; }
     .nivel { width: 30px; text-align: center; font-size: 11px; padding: 3px 0; border-radius: 8px; border: 0.5px solid #e5e7eb; background: #fff; color: #d1d5db; }
-    .nivel.activo-1 { border-color: #1D9E75; background: #E1F5EE; color: #0F6E56; font-weight: 600; }
-    .nivel.activo-2 { border-color: #EF9F27; background: #FAEEDA; color: #633806; font-weight: 600; }
-    .nivel.activo-3 { border-color: #E24B4A; background: #FCEBEB; color: #791F1F; font-weight: 600; }
-    .nivel.activo-pos-1 { border-color: #E24B4A; background: #FCEBEB; color: #791F1F; font-weight: 600; }
-    .nivel.activo-pos-2 { border-color: #EF9F27; background: #FAEEDA; color: #633806; font-weight: 600; }
-    .nivel.activo-pos-3 { border-color: #1D9E75; background: #E1F5EE; color: #0F6E56; font-weight: 600; }
+    /* El nivel marcado usa siempre el mismo color neutro (nunca semáforo),
+       para no alarmar; el significado se lee en las recomendaciones. */
+    .nivel.activo-1, .nivel.activo-2, .nivel.activo-3,
+    .nivel.activo-pos-1, .nivel.activo-pos-2, .nivel.activo-pos-3 {
+      border-color: #cbd5e1; background: #DFE8F0; color: #1f2937; font-weight: 600;
+    }
     .btn-pdf { font-size: 12px; padding: 8px 16px; border-radius: 8px; border: 0.5px solid #e5e7eb; background: #fff; color: #374151; cursor: pointer; margin-top: 1rem; display: inline-flex; align-items: center; gap: 6px; }
     .btn-mini { font-size: 11px; padding: 5px 10px; border-radius: 8px; border: 0.5px solid #e5e7eb; background: #fff; color: #374151; cursor: pointer; }
     .loading { text-align: center; color: #9ca3af; font-size: 13px; padding: 2rem; }
