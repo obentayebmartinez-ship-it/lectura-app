@@ -5,8 +5,7 @@
 // Seguridad: exige un token de sesión de Supabase válido Y que el email del que
 // llama esté en ADMIN_EMAILS. Cualquier otro usuario recibe 403.
 //
-// Variables de entorno necesarias en Vercel (además de las que ya usa
-// azure-token.js):
+// Variables de entorno necesarias en Vercel:
 //   SUPABASE_URL          (ya existe)
 //   SUPABASE_ANON_KEY     (ya existe)
 //   SUPABASE_SERVICE_KEY  ← NUEVA: la clave "service_role" del proyecto Supabase

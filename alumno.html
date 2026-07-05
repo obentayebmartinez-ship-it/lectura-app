@@ -73,6 +73,10 @@
     .nivel.activo-pos-1, .nivel.activo-pos-2, .nivel.activo-pos-3 {
       border-color: #cbd5e1; background: #DFE8F0; color: #1f2937; font-weight: 600;
     }
+    /* Etiqueta del nivel (Requiere trabajo / Reforzar / En nivel) en tono neutro */
+    .nivel-tag { font-size: 11px; font-weight: 600; color: #1f2937; background: #DFE8F0;
+      border: 0.5px solid #cbd5e1; border-radius: 8px; padding: 4px 10px; white-space: nowrap; }
+    .nivel-tag.vacio { background: #fff; color: #d1d5db; font-weight: 400; }
     .btn-pdf { font-size: 12px; padding: 8px 16px; border-radius: 8px; border: 0.5px solid #e5e7eb; background: #fff; color: #374151; cursor: pointer; margin-top: 1rem; display: inline-flex; align-items: center; gap: 6px; }
     .btn-mini { font-size: 11px; padding: 5px 10px; border-radius: 8px; border: 0.5px solid #e5e7eb; background: #fff; color: #374151; cursor: pointer; }
     .loading { text-align: center; color: #9ca3af; font-size: 13px; padding: 2rem; }
@@ -136,7 +140,7 @@
 <div class="card" id="card-registro" style="display:none;margin-bottom:1.25rem;">
   <div class="card-title">📋 Hoja de registro <small id="registro-fecha"></small></div>
   <div class="nota" style="margin-top:0;margin-bottom:1rem;">
-    Cómo se leen los niveles (1 bajo · 2 medio · 3 alto): en <b>velocidad</b>, <b>pausas y entonación</b> y <b>comprensión</b> un nivel más alto es mejor; en el resto (errores) el nivel indica cuánta dificultad se observa.
+    Cómo se leen los niveles: cada dimensión se valora como <b>Requiere trabajo</b>, <b>Reforzar</b> o <b>En nivel</b> (de menos a más logrado).
     Velocidad = PPM sobre el objetivo del curso · entonación = prosodia del análisis de voz · errores = frecuencia cada 100 palabras. Silabeo, rotación y comprensión los valora el profesional por observación directa.
   </div>
   <div class="grid-2" style="margin-bottom:0">
@@ -407,10 +411,12 @@ function render(sesiones) {
 
 // Hoja de registro en solo lectura, con flecha de evolución respecto a la
 // verificación anterior (mejora = menos dificultad, o más nivel si es positiva)
+const NIVEL_LABEL = { 1: "Requiere trabajo", 2: "Reforzar", 3: "En nivel" };
+
 function renderRegistro(sesion, previa) {
   document.getElementById("card-registro").style.display = "block";
   document.getElementById("registro-fecha").textContent =
-    `verificada el ${fmtFecha(sesion.fecha)} · 1 bajo · 2 medio · 3 alto`;
+    `verificada el ${fmtFecha(sesion.fecha)} · Requiere trabajo / Reforzar / En nivel`;
 
   const html = { 1: "", 2: "" };
   DIMENSIONES.forEach(g => {
@@ -421,7 +427,7 @@ function renderRegistro(sesion, previa) {
         if (previa && previa.niveles && previa.niveles[d.key] && val) {
           const delta = val - previa.niveles[d.key];
           if (delta !== 0) {
-            const mejora = d.positivo ? delta > 0 : delta < 0;
+            const mejora = delta > 0;   // escala unificada: subir de nivel es siempre mejorar
             trend = `<span class="dim-trend ${mejora ? "trend-mejora" : "trend-empeora"}">${mejora ? "▲ mejora" : "▼"}</span>`;
           }
         }
@@ -429,10 +435,7 @@ function renderRegistro(sesion, previa) {
         <div class="dim-fila">
           <div class="dim-label">${d.label}${trend}</div>
           <div class="niveles">
-            ${[1, 2, 3].map(n => {
-              const activo = val === n ? (d.positivo ? `activo-pos-${n}` : `activo-${n}`) : "";
-              return `<span class="nivel ${activo}">${n}</span>`;
-            }).join("")}
+            <span class="nivel-tag ${val ? "" : "vacio"}">${val ? NIVEL_LABEL[val] : "—"}</span>
           </div>
         </div>`;
       }).join("") + `</div>`;

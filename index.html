@@ -7,7 +7,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
 <script src="motor.js"></script>
-<script src="https://aka.ms/csspeech/jsbrowserpackageraw"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
@@ -112,20 +111,21 @@ sb.auth.getSession().then(({ data }) => {
   usuarioActual = data.session.user;
 });
 
-// ─── Azure Speech (token desde servidor, la clave nunca sale del backend) ─────
-let AZURE_TOKEN  = null;
-let AZURE_REGION = "westeurope";
-
-async function obtenerToken() {
-  // El endpoint exige sesión de LectorIA: se envía el token de Supabase
-  const { data: sesionAuth } = await sb.auth.getSession();
-  const jwt = sesionAuth.session?.access_token;
-  if (!jwt) { window.location.href = "login.html"; throw new Error("Sesión caducada"); }
-  const res  = await fetch("/api/azure-token", { headers: { Authorization: "Bearer " + jwt } });
+// ─── Whisper local (motor de reconocimiento propio, sustituye a Azure) ────────
+// El navegador graba la lectura completa y la envía al servidor Whisper, que
+// devuelve las palabras transcritas A CIEGAS con la misma forma que Azure
+// (Word/Offset/Duration/PronunciationAssessment) para que motor.js las analice.
+async function transcribirConWhisper(blob) {
+  if (!blob) return [];
+  const fd = new FormData();
+  fd.append("audio", blob, "lectura.webm");
+  const res = await fetch(WHISPER_API_URL + "/evaluar", { method: "POST", body: fd });
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error("El servidor de reconocimiento falló: " + (txt || res.status));
+  }
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || "No se pudo obtener el token de Azure");
-  AZURE_TOKEN  = data.token;
-  AZURE_REGION = data.region;
+  return data.allWords || [];
 }
 
 // ─── Lecturas ─────────────────────────────────────────────────────────────────
@@ -274,7 +274,6 @@ palabras.forEach((p, i) => {
 
 // ─── Estado de sesión ────────────────────────────────────────────────────────
 let grabando      = false;
-let recognizer    = null;
 let timer         = null;
 let segundos      = 0;
 let inicio        = null;
@@ -328,91 +327,35 @@ async function iniciar() {
   }, 1000);
 
   try {
-    // Arrancar la grabación de audio ANTES que el reconocedor: así los offsets
-    // de Azure caen siempre DENTRO de la grabación (con un pequeño desfase).
+    // Grabar la lectura completa. El reconocimiento ya NO es en vivo: al pulsar
+    // "terminar" enviamos el audio al servidor Whisper, que devuelve las
+    // palabras con timestamps (ver parar() → transcribirConWhisper).
     audioChunks = []; audioListo = null;
-    try {
-      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorder = new MediaRecorder(micStream);
-      mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
-      mediaRecorder.start(1000);
-    } catch (e) {
-      console.warn("No se pudo iniciar la grabación de audio (la sesión seguirá sin audio)", e);
-      mediaRecorder = null;
-    }
-
-    // Obtener token del servidor (la clave nunca sale del backend)
-    await obtenerToken();
-
-    // Configuración de Azure Speech con token temporal
-    const speechConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(AZURE_TOKEN, AZURE_REGION);
-    speechConfig.speechRecognitionLanguage = "es-ES";
-
-    // Segmentación tolerante: un niño que vacila no debe cortar la utterance
-    // (preserva Offsets/Syllables coherentes y mejora fluencyScore).
-    try {
-      speechConfig.setProperty(SpeechSDK.PropertyId.Speech_SegmentationSilenceTimeoutMs, "1500");
-      speechConfig.setProperty(SpeechSDK.PropertyId.SpeechServiceConnection_InitialSilenceTimeoutMs, "15000");
-    } catch(e) { console.warn("No se pudieron ajustar timeouts de segmentación", e); }
-
-    // Pronunciation Assessment — granularidad FONEMA (sílabas) + prosodia
-    const pronConfig = new SpeechSDK.PronunciationAssessmentConfig(
-      textOriginal,
-      SpeechSDK.PronunciationAssessmentGradingSystem.HundredMark,
-      SpeechSDK.PronunciationAssessmentGranularity.Phoneme,
-      true   // enableMiscue
-    );
-    try { pronConfig.enableProsodyAssessment(); } catch(e) { console.warn("Prosody no disponible", e); }
-
-    const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
-    recognizer = new SpeechSDK.SpeechRecognizer(speechConfig, audioConfig);
-    pronConfig.applyTo(recognizer);
-
-    // Resultado por utterance — SOLO acumulamos, el análisis se hace al final
-    recognizer.recognized = (s, e) => {
-      if (e.result.reason !== SpeechSDK.ResultReason.RecognizedSpeech) return;
-      const pr = SpeechSDK.PronunciationAssessmentResult.fromResult(e.result);
-      if (pr.fluencyScore) { fluencyTotal += pr.fluencyScore; fluencyCount++; }
-      if (pr.prosodyScore) { prosodyTotal += pr.prosodyScore; prosodyCount++; }
-      const words = pr.detailResult?.Words || [];
-      words.forEach(w => {
-        if (!w || !w.Word) return;
-        // CRÍTICO: con enableMiscue + texto de referencia, Azure mete en Words[]
-        // las palabras del texto que NO se dijeron (ErrorType "Omission").
-        // No son habla real: si entran en allWords enmascaran las omisiones.
-        const et = w.PronunciationAssessment?.ErrorType || w.ErrorType;
-        if (et === "Omission") return;
-        allWords.push(w);
-      });
-      // Nada visible para el alumno mientras lee: solo acumulamos en segundo plano
-    };
-
-    recognizer.canceled = (s, e) => {
-      if (e.reason === SpeechSDK.CancellationReason.Error) {
-        console.error("Azure cancelado:", e.errorDetails);
-        alert("Error Azure Speech:\n" + e.errorDetails);
-        resetBtn();
-      }
-    };
-
-    recognizer.startContinuousRecognitionAsync(
-      () => console.log("✅ Azure Speech iniciado"),
-      err => { alert("Error al iniciar micrófono:\n" + err); resetBtn(); }
-    );
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mediaRecorder = new MediaRecorder(micStream);
+    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+    mediaRecorder.start(1000);
+    console.log("🎙️ Grabando lectura…");
 
   } catch (err) {
-    alert("Error: " + err.message);
+    grabando = false;
+    clearInterval(timer);
+    if (micStream) micStream.getTracks().forEach(t => t.stop());
+    alert("No se pudo acceder al micrófono:\n" + err.message);
     resetBtn();
   }
 }
 
 // ─── PARAR ───────────────────────────────────────────────────────────────────
-function parar() {
+// Reconocimiento por LOTES: al terminar, cerramos la grabación y enviamos el
+// audio completo al servidor Whisper. Devuelve allWords (misma forma que Azure)
+// y a partir de ahí el análisis es idéntico (motor.js sin cambios).
+async function parar() {
   if (!grabando) return;
   grabando = false;
   clearInterval(timer);
 
-  // Cerrar la grabación de audio; el blob se recoge en guardarSesion
+  // Cerrar la grabación de audio; el mismo blob se transcribe y luego se sube.
   audioListo = new Promise(resolve => {
     if (!mediaRecorder || mediaRecorder.state === "inactive") { resolve(null); return; }
     mediaRecorder.onstop = () => {
@@ -427,16 +370,19 @@ function parar() {
   btn.className   = "btn finished";
   btn.textContent = "⏳ Finalizando...";
   btn.disabled    = true;
-  document.getElementById("msg").textContent = "Procesando la lectura…";
+  document.getElementById("msg").textContent = "Analizando la lectura…";
 
-  if (recognizer) {
-    recognizer.stopContinuousRecognitionAsync(
-      () => { recognizer.close(); recognizer = null; mostrarResultados(); },
-      err => { console.error(err); recognizer = null; mostrarResultados(); }
-    );
-  } else {
-    mostrarResultados();
+  // Enviar el audio al servidor Whisper y recoger las palabras reconocidas.
+  try {
+    const blob = await audioListo;
+    allWords = await transcribirConWhisper(blob);
+  } catch (err) {
+    console.error("Error al transcribir con Whisper:", err);
+    alert("No se pudo analizar la lectura.\n" + err.message +
+          "\n\n¿Está encendido el servidor de reconocimiento?");
+    allWords = [];
   }
+  mostrarResultados();
 }
 
 // ─── RESULTADOS FINALES (el análisis vive en motor.js) ──────────────────────
@@ -478,7 +424,7 @@ function mostrarResultados() {
 
   guardarSesion(m, res.detallePalabras, entradaMotor);
 
-  // Diagnóstico descargable (crudo de Azure + alineamiento) para el docente.
+  // Diagnóstico descargable (crudo del reconocedor + alineamiento) para el docente.
   window.__lectoria_diag = {
     version: MotorLectura.VERSION,
     fecha: new Date().toISOString(),

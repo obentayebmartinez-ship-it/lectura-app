@@ -61,8 +61,6 @@
     rotacion:          "Rotación (b/d, p/q): discriminación visual de letras espejo con apoyos multisensoriales.",
     comprension:       "Comprensión: acompañar cada lectura con 3-5 preguntas orales sobre lo leído."
   };
-  // Dimensiones donde un nivel ALTO es bueno (en el resto, alto = más dificultad)
-  const POSITIVAS = new Set(["velocidad", "pausas_entonacion", "comprension"]);
   const ETIQUETA_DIM = {
     silabeo: "Silabeo", pausas_entonacion: "Pausas y entonación", vacilacion: "Vacilación",
     rectificacion: "Rectificación", repeticion: "Repetición", velocidad: "Velocidad",
@@ -75,12 +73,14 @@
     adiciones: "adicion", repeticiones: "repeticion", rectificaciones: "rectificacion",
     vacilaciones: "vacilacion"
   };
-  // Gravedad de un nivel: 2 = prioritario, 1 = a vigilar, 0 = sin trabajo específico
+  // Gravedad de un nivel: 2 = prioritario, 1 = a vigilar, 0 = sin trabajo específico.
+  // Escala unificada: 1 es lo peor en TODAS las dimensiones (3 = lo mejor).
   function severidadNivel(key, nivel) {
     if (!nivel) return 0;
-    return POSITIVAS.has(key) ? (nivel === 1 ? 2 : nivel === 2 ? 1 : 0)
-                              : (nivel === 3 ? 2 : nivel === 2 ? 1 : 0);
+    return nivel === 1 ? 2 : nivel === 2 ? 1 : 0;
   }
+  // Etiqueta de cada nivel (coherente con verificar.html y alumno.html)
+  const NIVEL_LABEL = { 1: "Requiere trabajo", 2: "Reforzar", 3: "En nivel" };
 
   const VERDE = [29, 158, 117], AMBAR = [239, 159, 39], ROJO = [226, 75, 74];
   const TINTA = [17, 17, 17], GRIS = [107, 114, 128], GRIS_CLARO = [156, 163, 175];
@@ -170,20 +170,17 @@
         const val = niveles[d.key];
         doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(55, 65, 81);
         doc.text(d.label, colX[col], yy + 3.6);
-        // Tres casillas 1·2·3. La marcada usa SIEMPRE el mismo color neutro
-        // (nunca semáforo): el nivel se interpreta con las recomendaciones, no
-        // con el color, para no alarmar a las familias.
-        for (let n = 1; n <= 3; n++) {
-          const bx = colX[col] + colW - (4 - n) * 9;
-          const activa = val === n;
-          const c = activa ? NIVEL_ACTIVO : [243, 244, 246];
-          doc.setFillColor.apply(doc, c);
-          doc.roundedRect(bx, yy, 7.5, 5.5, 1.2, 1.2, "F");
-          doc.setFontSize(8);
-          if (activa) { doc.setFont("helvetica", "bold"); doc.setTextColor.apply(doc, TINTA); }
-          else { doc.setFont("helvetica", "normal"); doc.setTextColor.apply(doc, GRIS_CLARO); }
-          doc.text(String(n), bx + 3.75, yy + 4, { align: "center" });
-        }
+        // Una sola etiqueta con el nivel asignado (Requiere trabajo / Reforzar /
+        // En nivel), en tono neutro —nunca semáforo— para no alarmar a la familia:
+        // el significado se apoya en las recomendaciones, no en el color.
+        const etq = val ? NIVEL_LABEL[val] : "—";
+        doc.setFontSize(7.5); doc.setFont("helvetica", "bold");
+        const tw = doc.getTextWidth(etq) + 6;
+        const bx = colX[col] + colW - tw;
+        doc.setFillColor.apply(doc, val ? NIVEL_ACTIVO : [243, 244, 246]);
+        doc.roundedRect(bx, yy, tw, 5.5, 1.2, 1.2, "F");
+        doc.setTextColor.apply(doc, val ? TINTA : GRIS_CLARO);
+        doc.text(etq, bx + tw / 2, yy + 3.9, { align: "center" });
         yy += 7.5;
       });
       if (yy > maxY) maxY = yy;
@@ -315,7 +312,7 @@
 
       // Explicación de cómo se leen los niveles (evita que el color, ahora
       // neutro, se malinterprete: un "3" no siempre es bueno ni malo)
-      const explic = "Cómo se leen los niveles (1 bajo · 2 medio · 3 alto): en velocidad, pausas y entonación y comprensión, un nivel más alto es mejor; en el resto (errores), el nivel indica cuánta dificultad se observa. La velocidad se calcula sobre el objetivo del curso, la entonación con el análisis de voz y los errores por su frecuencia cada 100 palabras. Silabeo, rotación y comprensión los valora el profesional por observación directa.";
+      const explic = "Cómo se leen los niveles: cada dimensión se valora como «Requiere trabajo», «Reforzar» o «En nivel» (de menos a más logrado). La velocidad se calcula sobre el objetivo del curso, la entonación con el análisis de voz y los errores por su frecuencia cada 100 palabras. Silabeo, rotación y comprensión los valora el profesional por observación directa.";
       const linExp = doc.splitTextToSize(explic, 182);
       if (y + linExp.length * 3.3 > 286) { doc.addPage(); y = 18; }
       doc.setFontSize(7.5); doc.setFont("helvetica", "normal"); doc.setTextColor.apply(doc, GRIS);

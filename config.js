@@ -7,3 +7,9 @@ const SUPABASE_KEY = "sb_publishable_AaNY-lUFZOtL13_W_QQ0nw_SPp-5Nj8";
 
 // Objetivo de velocidad lectora (palabras/minuto) por curso
 const OBJETIVOS_PPM = { "1P": 65, "2P": 90, "3P": 105, "4P": 115, "5P": 125, "6P": 135 };
+
+// Motor de reconocimiento propio (Whisper local) — sustituye a Azure Speech.
+// El navegador graba la lectura completa y la manda aquí; el servidor devuelve
+// las palabras con timestamps (misma forma que usaba Azure) y motor.js analiza.
+// DESARROLLO: servidor local. PRODUCCIÓN: cambiar por la URL pública del servidor.
+const WHISPER_API_URL = "http://127.0.0.1:8000";

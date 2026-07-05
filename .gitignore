@@ -1,0 +1,14 @@
+# Entorno de Python del laboratorio Whisper (cientos de MB, no versionar)
+whisper-lab/.venv/
+**/__pycache__/
+*.pyc
+
+# Audios (contienen voz real grabada — nunca deben subirse al repo)
+*.wav
+*.m4a
+*.webm
+
+# Temporales / sistema
+*.tmp
+.DS_Store
+Thumbs.db

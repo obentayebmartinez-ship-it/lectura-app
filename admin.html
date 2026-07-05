@@ -183,7 +183,7 @@ function render(ses, soloV) {
     </div>
     <div class="card">
       <div class="card-title">Baremo por curso — fluidez, prosodia y comprensión</div>
-      <div class="card-sub">Fluidez y prosodia las mide Azure (0-100). La comprensión es tu valoración 1-3 en las lecturas verificadas.</div>
+      <div class="card-sub">Fluidez (0-100) del reconocedor. Prosodia solo en lecturas antiguas de Azure; las nuevas con Whisper no la miden. La comprensión es tu valoración 1-3 en las lecturas verificadas.</div>
       <div class="tabla-wrap">${tablaFluidez(ses)}</div>
     </div>
     <div class="card">
@@ -215,7 +215,6 @@ function bloqueKPIs(ses) {
   const ppmG = resumen(ses.map(s => s.ppm));
   const precG = resumen(ses.map(s => s.precision));
   const minutos = ses.reduce((s, r) => s + (r.duracion_segundos || 120), 0) / 60;
-  const gasto = (minutos * 0.006).toFixed(2);
   const nUsuarios = usuarios.length || new Set(ses.map(s => s.user_id)).size;
   return `
     <div class="grid-4">
@@ -237,7 +236,7 @@ function bloqueKPIs(ses) {
       <div class="card">
         <div class="metric-label">Precisión media</div>
         <div class="metric-value blue">${r0(precG.media)}%</div>
-        <div class="metric-sub">gasto Azure estimado ~$${gasto}</div>
+        <div class="metric-sub">${r0(minutos)} min de audio · reconocimiento propio (Whisper), coste ~$0</div>
       </div>
     </div>`;
 }

@@ -84,6 +84,19 @@
   .btn-guardar:disabled { background: #9ca3af; cursor: default; }
   .guardado-ok { font-size: 12px; color: #1D9E75; text-align: center; margin-top: 8px; display: none; }
   .guardado-ok.show { display: block; }
+  /* Niveles con ETIQUETA (Requiere trabajo · Reforzar · En nivel) + criterios */
+  .dim-fila { flex-direction: column; align-items: stretch; gap: 6px; }
+  .dim-cab { display: flex; align-items: center; gap: 4px; }
+  .dim-medida { font-size: 10.5px; color: #6b7280; margin-top: 1px; }
+  .dim-ayuda { border: none; background: none; color: #b6bcc6; cursor: pointer; font-size: 13px; line-height: 1; padding: 0 2px; }
+  .dim-ayuda:hover { color: #378ADD; }
+  .dim-criterio { font-size: 11px; color: #4b5563; background: #f9fafb; border-left: 2px solid #cbd5e1; border-radius: 6px; padding: 7px 10px; margin: 2px 0 2px; line-height: 1.5; }
+  .niveles-lbl { display: flex; gap: 5px; }
+  .nivel-lbl { flex: 1; text-align: center; font-size: 11px; padding: 6px 4px; border-radius: 8px; border: 0.5px solid #e5e7eb; background: #fff; cursor: pointer; color: #9ca3af; white-space: nowrap; transition: all .12s; }
+  .nivel-lbl:hover { border-color: #cbd5e1; }
+  .nivel-lbl.activo.niv-mal  { border-color: #E24B4A; background: #FCEBEB; color: #791F1F; font-weight: 600; }
+  .nivel-lbl.activo.niv-med  { border-color: #EF9F27; background: #FAEEDA; color: #633806; font-weight: 600; }
+  .nivel-lbl.activo.niv-bien { border-color: #1D9E75; background: #E1F5EE; color: #0F6E56; font-weight: 600; }
   .loading { text-align: center; color: #9ca3af; font-size: 13px; padding: 2rem; }
 </style>
 </head>
@@ -141,7 +154,7 @@ const LEYENDA = [
 const DIMENSIONES = [
   { grupo: "Fluidez lectora", items: [
     { key: "silabeo",           label: "Silabeo",             manual: true,  sub: "solo observación directa" },
-    { key: "pausas_entonacion", label: "Pausas y entonación", positivo: true, sub: "prosodia (Azure)" },
+    { key: "pausas_entonacion", label: "Pausas y entonación", positivo: true, sub: "entonación y ritmo · escucha el audio para valorar" },
     { key: "vacilacion",        label: "Vacilación",          tipo: "vacilacion" },
     { key: "rectificacion",     label: "Rectificación",       tipo: "rectificacion" },
     { key: "repeticion",        label: "Repetición",          tipo: "repeticion" },
@@ -159,9 +172,30 @@ const DIMENSIONES = [
   ]}
 ];
 
+// ─── Los tres niveles: etiqueta clara + clase de color (1 peor → 3 mejor) ─────
+const NIVEL_INFO = {
+  1: { label: "Requiere trabajo", cls: "niv-mal"  },
+  2: { label: "Reforzar",         cls: "niv-med"  },
+  3: { label: "En nivel",         cls: "niv-bien" }
+};
+
+// ─── Cómo se decide cada nivel (se muestra al pulsar la ⓘ de cada fila) ───────
+const CRIT_ERROR = "Se mide por frecuencia: veces que aparece por cada 100 palabras leídas. " +
+  "«En nivel» ≤1 · «Reforzar» entre 1 y 4 · «Requiere trabajo» más de 4. La IA lo propone y tú lo confirmas o lo cambias.";
+const COMO_SE_MIDE = {
+  velocidad: "Velocidad lectora (PPM) frente al objetivo del curso. «En nivel» ≥100% del objetivo · «Reforzar» 80–99% · «Requiere trabajo» menos del 80%.",
+  pausas_entonacion: "Entonación y ritmo al leer. El reconocedor actual no la mide solo: valórala tú escuchando el audio.",
+  silabeo: "Si lee sílaba a sílaba en vez de palabras enteras. Se valora por observación directa durante la lectura.",
+  rotacion: "Confusión de letras espejo (b/d, p/q). Es un error visual: se valora por observación directa.",
+  comprension: "Cuánto entiende de lo leído. Se valora con 3–5 preguntas orales al terminar.",
+  vacilacion: CRIT_ERROR, rectificacion: CRIT_ERROR, repeticion: CRIT_ERROR,
+  sustitucion: CRIT_ERROR, omisiones: CRIT_ERROR, inversion: CRIT_ERROR, adicion: CRIT_ERROR
+};
+
 let sesion = null;
 let palabras = [];
 let niveles = {};          // {key: 1|2|3}
+let medidas = {};          // {key: texto con la medición real de esta lectura}
 let nivelesTocados = new Set();
 let seleccionada = null;
 let audioEl = null;
@@ -200,7 +234,29 @@ function tipoEfectivo(p) { return p.tipo_verificado || p.tipo_ia; }
 
 function nivelPorTasa(count, totalRef) {
   const t = totalRef > 0 ? (count / totalRef) * 100 : 0;
-  return t <= 1 ? 1 : t <= 4 ? 2 : 3;   // errores por cada 100 palabras
+  // Escala UNIFICADA: 3 siempre es lo mejor. Pocos errores por cada 100
+  // palabras → 3 (bien); muchos → 1 (a trabajar).
+  return t <= 1 ? 3 : t <= 4 ? 2 : 1;
+}
+
+// Mediciones reales de ESTA lectura (texto que se muestra bajo cada fila),
+// independientes de si el nivel viene autocalculado o ya guardado.
+function calcularMedidas() {
+  const totalRef = palabras.filter(p => p.idx >= 0 && tipoEfectivo(p) !== "no_leida").length || 1;
+  const cuenta = t => palabras.filter(p => tipoEfectivo(p) === t).length;
+  const objetivo = OBJETIVOS_PPM[sesion.curso] || 90;
+  const pctPpm = sesion.ppm ? Math.round((sesion.ppm / objetivo) * 100) : 0;
+  const m = c => `${c} ${c === 1 ? "vez" : "veces"} en ${totalRef} palabras leídas · ${(totalRef > 0 ? c / totalRef * 100 : 0).toFixed(1)} por cada 100`;
+  medidas = {
+    velocidad:     `${sesion.ppm != null ? sesion.ppm : "—"} PPM · objetivo del curso ${objetivo} (${pctPpm}%)`,
+    vacilacion:    m(cuenta("vacilacion")),
+    rectificacion: m(cuenta("rectificacion")),
+    repeticion:    m(cuenta("repeticion")),
+    sustitucion:   m(cuenta("sustitucion")),
+    omisiones:     m(cuenta("omision")),
+    inversion:     m(cuenta("inversion")),
+    adicion:       m(cuenta("adicion"))
+  };
 }
 
 function calcularNivelesAuto() {
@@ -227,6 +283,7 @@ function calcularNivelesAuto() {
 // ─── Render ──────────────────────────────────────────────────────────────────
 function render() {
   leyExpSel = null;   // el DOM se reconstruye: la explicación arranca cerrada
+  calcularMedidas();  // siempre: la medición real se muestra aunque los niveles vengan guardados
   if (sesion.niveles && Object.keys(sesion.niveles).length > 0 && !hayCambios) {
     niveles = { ...sesion.niveles };
     Object.keys(niveles).forEach(k => nivelesTocados.add(k));
@@ -268,10 +325,11 @@ function render() {
       </div>
       <div>
         <div class="card">
-          <div class="card-title">📋 Hoja de registro <span style="font-size:11px;font-weight:400;color:#9ca3af">1 bajo · 2 medio · 3 alto</span></div>
+          <div class="card-title">📋 Hoja de registro</div>
+          <div class="nota" style="margin:0 0 12px">Cada fila se valora en tres niveles: <b style="color:#791F1F">Requiere trabajo</b> · <b style="color:#633806">Reforzar</b> · <b style="color:#0F6E56">En nivel</b>.
+          La IA propone uno según los datos de la lectura (lo ves bajo cada fila) y <b>tú lo confirmas o lo cambias con un clic</b>.
+          Pulsa la <b>ⓘ</b> de cada fila para ver cómo se decide. Silabeo, rotación y comprensión las valoras tú por observación directa.</div>
           <div id="hoja"></div>
-          <div class="nota">Los niveles con datos se han calculado automáticamente y puedes corregirlos.
-          Silabeo, rotación y comprensión requieren tu observación directa.</div>
           <button class="btn-guardar" id="btn-guardar" onclick="guardarVerificacion()">💾 Guardar verificación</button>
           <div class="guardado-ok" id="guardado-ok">✓ Verificación guardada — esta sesión pasa al dataset</div>
         </div>
@@ -303,16 +361,22 @@ function renderHoja() {
       <div class="grupo-nombre">${g.grupo}</div>
       ${g.items.map(d => {
         const val = niveles[d.key] || null;
+        const medida = medidas[d.key];
         return `
         <div class="dim-fila">
-          <div>
-            <div class="dim-label">${d.label}</div>
-            ${d.sub ? `<div class="dim-sub">${d.sub}</div>` : ""}
+          <div class="dim-cab">
+            <span class="dim-label">${d.label}</span>
+            <button class="dim-ayuda" onclick="toggleCriterio('${d.key}')" title="Cómo se decide este nivel">ⓘ</button>
           </div>
-          <div class="niveles">
+          ${medida ? `<div class="dim-medida">${medida}</div>`
+                   : (d.sub ? `<div class="dim-sub">${d.sub}</div>` : "")}
+          <div class="dim-criterio" id="crit-${d.key}" style="display:none">${COMO_SE_MIDE[d.key] || CRIT_ERROR}</div>
+          <div class="niveles-lbl">
             ${[1,2,3].map(n => {
-              const activo = val === n ? (d.positivo ? `activo-pos-${n}` : `activo-${n}`) : "";
-              return `<button class="nivel ${activo}" onclick="setNivel('${d.key}', ${n})">${n}</button>`;
+              // 1 Requiere trabajo (rojo) · 2 Reforzar (ámbar) · 3 En nivel (verde)
+              const info = NIVEL_INFO[n];
+              const activo = val === n ? `activo ${info.cls}` : "";
+              return `<button class="nivel-lbl ${activo}" onclick="setNivel('${d.key}', ${n})">${info.label}</button>`;
             }).join("")}
           </div>
         </div>`;
@@ -325,6 +389,12 @@ function setNivel(key, n) {
   nivelesTocados.add(key);
   hayCambios = true;
   renderHoja();
+}
+
+// Despliega/oculta el criterio de una fila (cómo se decide su nivel)
+function toggleCriterio(key) {
+  const el = document.getElementById("crit-" + key);
+  if (el) el.style.display = el.style.display === "none" ? "block" : "none";
 }
 
 // ─── Leyenda: explicar un tipo de error al pulsarlo ──────────────────────────
