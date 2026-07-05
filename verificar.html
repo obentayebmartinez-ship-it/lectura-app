@@ -25,9 +25,19 @@
   .sesion-meta { font-size: 12px; color: #6b7280; margin-top: 2px; }
   .chip { font-size: 11px; padding: 3px 10px; border-radius: 20px; font-weight: 500; background: #f3f4f6; color: #374151; }
   audio { width: 100%; margin-top: 0.75rem; height: 36px; }
-  .leyenda { display: flex; gap: 10px; margin: 0.75rem 0; flex-wrap: wrap; }
-  .ley-item { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #6b7280; }
+  .leyenda { display: flex; gap: 6px; margin: 0.75rem 0 0; flex-wrap: wrap; }
+  .ley-item { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: #6b7280; font-family: inherit; background: none; border: 0.5px solid transparent; border-radius: 20px; padding: 3px 8px; cursor: pointer; transition: background .15s, border-color .15s; }
+  .ley-item:hover { background: #f3f4f6; }
+  .ley-item.sel { background: #f3f4f6; border-color: #d1d5db; color: #374151; }
   .ley-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+  .ley-info { display: inline-flex; align-items: center; justify-content: center; width: 13px; height: 13px; border-radius: 50%; background: #e5e7eb; color: #6b7280; font-size: 9px; font-weight: 700; }
+  .ley-item.sel .ley-info { background: #378ADD; color: #fff; }
+  .ley-exp { display: none; margin: 0.6rem 0 0; font-size: 12.5px; color: #374151; line-height: 1.5; background: #f9fafb; border-left: 3px solid #ccc; border-radius: 0 8px 8px 0; padding: 9px 12px; animation: leyIn .15s ease; }
+  .ley-exp.show { display: block; }
+  .ley-exp b { color: #111; }
+  .ley-exp .ej { color: #6b7280; font-style: italic; }
+  .ley-exp-dot { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+  @keyframes leyIn { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
   .reading { font-size: 18px; line-height: 2.1; color: #111; }
   .word { display: inline; border-radius: 3px; padding: 1px 4px; cursor: pointer; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
   .word:hover { outline: 1.5px solid #378ADD; }
@@ -111,6 +121,17 @@ const TIPOS = {
   vacilacion:     { label: "Vacilación",     cls: "vacilacion",    asignable: true }
 };
 
+// ─── Leyenda interactiva: color + definición breve + ejemplo de cada error ───
+const LEYENDA = [
+  { tipo: "omision",       color: "#F09595", def: "El alumno se salta una palabra del texto y no llega a leerla.", ej: "en «las manzanas rojas» lee «las rojas»." },
+  { tipo: "sustitucion",   color: "#EF9F27", def: "Lee una palabra distinta a la que pone el texto.", ej: "lee «caza» donde pone «casa»." },
+  { tipo: "inversion",     color: "#7FB5E6", def: "Cambia el orden de letras o sílabas dentro de la palabra.", ej: "lee «prado» donde pone «pardo»." },
+  { tipo: "repeticion",    color: "#AFA9EC", def: "Vuelve a leer una palabra o sílaba que ya había leído.", ej: "«la… la casa»." },
+  { tipo: "rectificacion", color: "#E8C083", def: "Se equivoca al leer y se corrige él mismo a continuación.", ej: "«el pe… perro»." },
+  { tipo: "vacilacion",    color: "#E0A845", def: "Duda o hace una pausa larga antes de una palabra, aunque acabe leyéndola bien.", ej: "«… … elefante»." },
+  { tipo: "adicion",       color: "#E29CC0", def: "Añade una palabra o sílaba que no está en el texto.", ej: "lee «la gran casa» donde pone «la casa»." }
+];
+
 // ─── Hoja de registro: dimensiones y cálculo automático de niveles ───────────
 // positivo:true → nivel alto es BUENO (velocidad, entonación, comprensión).
 // En el resto el nivel refleja la intensidad de la dificultad observada.
@@ -142,6 +163,7 @@ let nivelesTocados = new Set();
 let seleccionada = null;
 let audioEl = null;
 let hayCambios = false;
+let leyExpSel = null;      // tipo de error explicado en la leyenda (o null)
 
 // ─── Carga ───────────────────────────────────────────────────────────────────
 async function init() {
@@ -201,6 +223,7 @@ function calcularNivelesAuto() {
 
 // ─── Render ──────────────────────────────────────────────────────────────────
 function render() {
+  leyExpSel = null;   // el DOM se reconstruye: la explicación arranca cerrada
   if (sesion.niveles && Object.keys(sesion.niveles).length > 0 && !hayCambios) {
     niveles = { ...sesion.niveles };
     Object.keys(niveles).forEach(k => nivelesTocados.add(k));
@@ -233,14 +256,9 @@ function render() {
         <div class="card">
           <div class="card-title">Lectura — pulsa cualquier palabra para escucharla o corregir su marca</div>
           <div class="leyenda">
-            <div class="ley-item"><div class="ley-dot" style="background:#F09595"></div>Omisión</div>
-            <div class="ley-item"><div class="ley-dot" style="background:#EF9F27"></div>Sustitución</div>
-            <div class="ley-item"><div class="ley-dot" style="background:#7FB5E6"></div>Inversión</div>
-            <div class="ley-item"><div class="ley-dot" style="background:#AFA9EC"></div>Repetición</div>
-            <div class="ley-item"><div class="ley-dot" style="background:#E8C083"></div>Rectificación</div>
-            <div class="ley-item"><div class="ley-dot" style="background:#E0A845"></div>Vacilación</div>
-            <div class="ley-item"><div class="ley-dot" style="background:#E29CC0"></div>Adición</div>
+            ${LEYENDA.map(l => `<button class="ley-item" data-tipo="${l.tipo}" onclick="explicarError('${l.tipo}')"><span class="ley-dot" style="background:${l.color}"></span>${TIPOS[l.tipo].label} <span class="ley-info">?</span></button>`).join("")}
           </div>
+          <div class="ley-exp" id="ley-exp"></div>
           <div class="reading" id="reading"></div>
         </div>
       </div>
@@ -303,6 +321,24 @@ function setNivel(key, n) {
   nivelesTocados.add(key);
   hayCambios = true;
   renderHoja();
+}
+
+// ─── Leyenda: explicar un tipo de error al pulsarlo ──────────────────────────
+function explicarError(tipo) {
+  const box = document.getElementById("ley-exp");
+  const items = document.querySelectorAll(".ley-item");
+  if (leyExpSel === tipo) {                 // segundo clic: cerrar
+    leyExpSel = null;
+    box.classList.remove("show");
+    items.forEach(b => b.classList.remove("sel"));
+    return;
+  }
+  leyExpSel = tipo;
+  items.forEach(b => b.classList.toggle("sel", b.dataset.tipo === tipo));
+  const l = LEYENDA.find(x => x.tipo === tipo);
+  box.style.borderLeftColor = l.color;
+  box.innerHTML = `<span class="ley-exp-dot" style="background:${l.color}"></span><b>${TIPOS[tipo].label}</b> — ${l.def} <span class="ej">Ej.: ${l.ej}</span>`;
+  box.classList.add("show");
 }
 
 // ─── Menú de corrección por palabra ──────────────────────────────────────────
