@@ -10,209 +10,93 @@
 <script src="https://aka.ms/csspeech/jsbrowserpackageraw"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: system-ui, sans-serif; background: #f5f5f0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1rem; }
-.screen { background: #fff; border-radius: 20px; padding: 1.5rem; max-width: 440px; width: 100%; border: 0.5px solid #e5e7eb; }
-.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-.brand { font-size: 15px; font-weight: 500; color: #111; display: flex; align-items: center; gap: 8px; }
+html, body { height: 100%; }
+body { font-family: system-ui, sans-serif; background: #f5f5f0; color: #111; }
+/* Ocupa toda la pantalla: cabecera arriba, lectura que crece en el centro y
+   botón de grabar siempre visible abajo (sin necesidad de hacer scroll). */
+.screen { max-width: 900px; margin: 0 auto; height: 100dvh; overflow: hidden; display: flex; flex-direction: column; padding: 0.9rem 1.1rem 0; gap: 0.7rem; }
+.topbar { display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+.brand { font-size: 15px; font-weight: 500; display: flex; align-items: center; gap: 8px; }
 .brand-dot { width: 8px; height: 8px; border-radius: 50%; background: #1D9E75; }
-.back-btn { font-size: 12px; color: #6b7280; border: 0.5px solid #d1d5db; border-radius: 8px; padding: 5px 12px; background: transparent; cursor: pointer; }
-.alumno-card { display: flex; align-items: center; gap: 12px; background: #f5f5f0; border-radius: 12px; padding: 0.875rem 1rem; margin-bottom: 1.25rem; }
-.avatar { width: 40px; height: 40px; border-radius: 50%; background: #E1F5EE; display: flex; align-items: center; justify-content: center; font-weight: 500; font-size: 13px; color: #0F6E56; flex-shrink: 0; }
-.alumno-info { flex: 1; }
+.back-btn { font-size: 12px; color: #6b7280; border: 0.5px solid #d1d5db; border-radius: 8px; padding: 5px 12px; background: #fff; cursor: pointer; }
+.alumno-row { display: flex; align-items: center; gap: 12px; background: #fff; border: 0.5px solid #e5e7eb; border-radius: 12px; padding: 0.65rem 0.9rem; flex-shrink: 0; }
+.avatar { width: 38px; height: 38px; border-radius: 50%; background: #E1F5EE; display: flex; align-items: center; justify-content: center; font-weight: 500; font-size: 13px; color: #0F6E56; flex-shrink: 0; }
+.alumno-info { flex: 1; min-width: 0; }
 .alumno-input { width: 100%; padding: 0; border: none; background: transparent; font-size: 14px; font-weight: 500; color: #111; outline: none; }
 .alumno-input::placeholder { color: #9ca3af; font-weight: 400; }
-.alumno-sub { font-size: 11px; color: #6b7280; margin-top: 1px; }
+.alumno-sub { font-size: 11px; color: #6b7280; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .nivel-badge { font-size: 11px; background: #E1F5EE; color: #0F6E56; padding: 3px 10px; border-radius: 20px; font-weight: 500; white-space: nowrap; }
-.mascot { text-align: center; font-size: 36px; margin-bottom: 0.25rem; }
-.mascot-msg { text-align: center; font-size: 13px; color: #6b7280; margin-bottom: 1.25rem; }
-.texto-card { border: 0.5px solid #e5e7eb; border-radius: 14px; padding: 1.25rem; margin-bottom: 1rem; background: #fff; }
-.texto-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 0.875rem; flex-wrap: wrap; }
-.materia-badge { font-size: 10px; padding: 2px 8px; border-radius: 6px; background: #E6F1FB; color: #0C447C; font-weight: 500; }
-.palabras-count { font-size: 11px; color: #9ca3af; }
-.leyenda { display: flex; gap: 12px; margin-bottom: 0.75rem; flex-wrap: wrap; }
-.ley-item { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #6b7280; }
-.ley-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
-.reading { font-size: 19px; line-height: 2; color: #111; overflow: visible; }
-.word { display: inline; border-radius: 3px; padding: 1px 4px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
-.word.done { color: #9ca3af; }
-.word.omision, .word.sustitucion, .word.inversion, .word.repeticion, .word.vacilacion { cursor: help; position: relative; }
-
-/* ── Tooltip tipo bocadillo ── */
-.word[data-tip]:hover::after {
-  content: attr(data-tip);
-  position: absolute;
-  left: 50%;
-  bottom: calc(100% + 8px);
-  transform: translateX(-50%);
-  background: #1f2937;
-  color: #fff;
-  font-size: 12px;
-  font-weight: 400;
-  line-height: 1.35;
-  letter-spacing: 0.1px;
-  padding: 7px 10px;
-  border-radius: 8px;
-  white-space: normal;
-  width: max-content;
-  max-width: 230px;
-  text-align: center;
-  box-shadow: 0 6px 20px rgba(0,0,0,0.18);
-  z-index: 50;
-  pointer-events: none;
-  animation: tipIn 0.12s ease-out;
-}
-.word[data-tip]:hover::before {
-  content: "";
-  position: absolute;
-  left: 50%;
-  bottom: calc(100% + 2px);
-  transform: translateX(-50%);
-  border: 6px solid transparent;
-  border-top-color: #1f2937;
-  z-index: 50;
-  pointer-events: none;
-  animation: tipIn 0.12s ease-out;
-}
-@keyframes tipIn { from { opacity: 0; transform: translateX(-50%) translateY(3px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
-.word.omision { background: #FCEBEB; color: #791F1F; }
-.word.sustitucion { background: #FAEEDA; color: #633806; }
-.word.repeticion { background: #EEEDFE; color: #3C3489; }
-.word.inversion { background: #E0EFFA; color: #0C447C; }
-.word.vacilacion { color: #92600A; text-decoration: underline wavy #E0A845; text-underline-offset: 2px; }
-.word.rectificacion { background: #FDF3E7; color: #9A6A1F; cursor: help; position: relative; }
-.prog-wrap { background: #f3f4f6; border-radius: 6px; height: 6px; margin-bottom: 4px; overflow: hidden; }
-.prog-fill { height: 100%; border-radius: 6px; background: #1D9E75; transition: width 0.3s; }
+/* Tarjeta de lectura: crece para llenar el hueco y hace scroll interno si el
+   texto es muy largo. La tipografía escala con el tamaño de pantalla. */
+.texto-card { flex: 1; min-height: 0; overflow-y: auto; background: #fff; border: 0.5px solid #e5e7eb; border-radius: 16px; padding: clamp(1rem, 3.5vw, 2.25rem); }
+.reading { font-size: clamp(20px, 2.4vw, 30px); line-height: 1.95; color: #111; max-width: 46ch; margin: 0 auto; }
+.word { display: inline; }
+/* Barra inferior fija con el botón de grabar */
+.barra-inferior { flex-shrink: 0; background: #f5f5f0; padding: 0.5rem 0 0.9rem; }
+.hint { text-align: center; font-size: 12.5px; color: #6b7280; margin-bottom: 0.5rem; min-height: 16px; }
+.prog-wrap { background: #e5e7eb; border-radius: 6px; height: 5px; margin-bottom: 0.6rem; overflow: hidden; }
+.prog-fill { height: 100%; border-radius: 6px; background: #1D9E75; transition: width 0.3s; width: 0; }
 .prog-wrap.listening .prog-fill { width: 100% !important; animation: progPulse 1.4s ease-in-out infinite; }
 @keyframes progPulse { 0%,100%{opacity:.25} 50%{opacity:.7} }
-.prog-label { font-size: 11px; color: #9ca3af; text-align: right; margin-bottom: 1rem; }
-.stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 1.25rem; }
-.stat { background: #f9fafb; border-radius: 10px; padding: 10px 8px; text-align: center; }
-.stat-n { font-size: 20px; font-weight: 500; color: #111; }
-.stat-l { font-size: 10px; color: #9ca3af; margin-top: 2px; }
-.btn { width: 100%; padding: 14px; border-radius: 12px; border: none; font-size: 15px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: opacity 0.15s; }
+.btn { width: 100%; padding: 15px; border-radius: 14px; border: none; font-size: 16px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: opacity 0.15s; }
 .btn.idle { background: #1D9E75; color: #fff; }
 .btn.recording { background: #E24B4A; color: #fff; animation: pulse 1.2s infinite; }
 .btn.finished { background: #378ADD; color: #fff; }
+.btn.azul { background: #378ADD; color: #fff; }
+.btn.gris { background: #fff; color: #374151; border: 0.5px solid #d1d5db; }
+.btn:disabled { opacity: .6; cursor: default; }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.7} }
-.result { background: #f9fafb; border: 0.5px solid #e5e7eb; border-radius: 14px; padding: 1.25rem; margin-top: 1rem; display: none; }
-.result.show { display: block; }
-.result-header { display: flex; align-items: center; gap: 8px; margin-bottom: 1rem; }
-.result-title { font-size: 14px; font-weight: 500; color: #111; }
-.result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 1rem; }
-.result-grid-4 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 7px; margin-bottom: 1rem; }
-.grupo-titulo { font-size: 11px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.04em; margin: 0.5rem 0 0.5rem; }
-.result-item { background: #fff; border: 0.5px solid #e5e7eb; border-radius: 10px; padding: 10px; text-align: center; }
-.result-n { font-size: 22px; font-weight: 500; color: #111; }
-.result-grid-4 .result-n { font-size: 18px; }
-.result-grid-4 .result-l { font-size: 9px; }
-.result-n.ok { color: #1D9E75; }
-.result-n.warn { color: #BA7517; }
-.result-l { font-size: 10px; color: #9ca3af; margin-top: 2px; }
-.error-list { background: #fff; border: 0.5px solid #e5e7eb; border-radius: 10px; padding: 0.75rem; }
-.error-titulo { font-size: 12px; font-weight: 500; color: #374151; margin-bottom: 0.5rem; }
-.error-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 0.5px solid #f3f4f6; font-size: 12px; color: #6b7280; }
-.error-row:last-child { border-bottom: none; }
-.tag { font-size: 10px; padding: 2px 8px; border-radius: 6px; font-weight: 500; }
-.tag-omision { background: #FCEBEB; color: #791F1F; }
-.tag-sustitucion { background: #FAEEDA; color: #633806; }
-.tag-repeticion { background: #EEEDFE; color: #3C3489; }
-.tag-inversion { background: #E0EFFA; color: #0C447C; }
-.tag-vacilacion { background: #FBF1DC; color: #92600A; }
-.accuracy-bar { margin-top: 0.75rem; background: #fff; border: 0.5px solid #e5e7eb; border-radius: 10px; padding: 0.75rem; }
-.accuracy-label { font-size: 11px; color: #6b7280; margin-bottom: 4px; display: flex; justify-content: space-between; }
-.accuracy-track { background: #f3f4f6; border-radius: 4px; height: 8px; overflow: hidden; }
-.accuracy-fill { height: 100%; border-radius: 4px; background: #1D9E75; transition: width 0.5s; }
-.guardado { font-size: 12px; color: #1D9E75; text-align: center; margin-top: 10px; display: none; align-items: center; justify-content: center; gap: 5px; }
-.guardado.show { display: flex; }
+/* Overlay de fin de sesión: mensaje amable, SIN datos numéricos para el alumno */
+.overlay { position: fixed; inset: 0; background: rgba(30,30,30,0.45); display: none; align-items: center; justify-content: center; padding: 1.25rem; z-index: 100; }
+.overlay.show { display: flex; animation: ovIn .18s ease; }
+@keyframes ovIn { from { opacity: 0; } to { opacity: 1; } }
+.overlay-card { background: #fff; border-radius: 20px; padding: 2rem 1.5rem; max-width: 380px; width: 100%; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.25); }
+.overlay-emoji { font-size: 52px; line-height: 1; margin-bottom: 0.5rem; }
+.overlay-title { font-size: 20px; font-weight: 600; color: #111; margin-bottom: 0.35rem; }
+.overlay-sub { font-size: 13px; color: #6b7280; margin-bottom: 1.5rem; }
+.overlay-btns { display: flex; flex-direction: column; gap: 8px; }
+.link-min { margin-top: 0.9rem; background: none; border: none; color: #9ca3af; font-size: 11px; cursor: pointer; text-decoration: underline; }
 </style>
 </head>
 <body>
 <div class="screen">
-  <div class="header">
+  <div class="topbar">
     <div class="brand"><div class="brand-dot"></div>LectorIA</div>
     <button class="back-btn" onclick="window.location.href='panel.html'">← Panel</button>
   </div>
 
-  <div class="alumno-card">
+  <div class="alumno-row">
     <div class="avatar" id="avatar">?</div>
     <div class="alumno-info">
       <input class="alumno-input" type="text" id="alumno" placeholder="Nombre del alumno" />
-      <div class="alumno-sub">Sesión de lectura</div>
+      <div class="alumno-sub" id="materia-linea">Sesión de lectura</div>
     </div>
     <span class="nivel-badge" id="nivel-badge">—</span>
   </div>
 
-  <div class="mascot" id="mascot">📖</div>
-  <div class="mascot-msg" id="msg">Lee el texto en voz alta cuando estés listo</div>
-
   <div class="texto-card">
-    <div class="texto-meta">
-      <span class="materia-badge" id="materia-badge">—</span>
-      <span class="palabras-count" id="palabras-count">— palabras</span>
-    </div>
-    <div class="leyenda">
-      <div class="ley-item"><div class="ley-dot" style="background:#F09595"></div>Omisión</div>
-      <div class="ley-item"><div class="ley-dot" style="background:#EF9F27"></div>Sustitución</div>
-      <div class="ley-item"><div class="ley-dot" style="background:#7FB5E6"></div>Inversión</div>
-      <div class="ley-item"><div class="ley-dot" style="background:#AFA9EC"></div>Repetición</div>
-      <div class="ley-item"><div class="ley-dot" style="background:#E8C083"></div>Rectificación</div>
-      <div class="ley-item"><div class="ley-dot" style="background:#E0A845"></div>Vacilación</div>
-    </div>
     <div class="reading" id="texto"></div>
   </div>
 
-  <div class="prog-wrap" id="prog-wrap"><div class="prog-fill" id="prog" style="width:0%"></div></div>
-  <div class="prog-label" id="prog-label">Listo para empezar</div>
-
-  <div class="stats">
-    <div class="stat"><div class="stat-n" id="tiempo">0s</div><div class="stat-l">tiempo</div></div>
-    <div class="stat"><div class="stat-n" id="ppm">—</div><div class="stat-l">palabras/min</div></div>
-    <div class="stat"><div class="stat-n" id="estado">—</div><div class="stat-l">estado</div></div>
+  <div class="barra-inferior">
+    <div class="hint" id="msg">Lee el texto en voz alta cuando estés listo</div>
+    <div class="prog-wrap" id="prog-wrap"><div class="prog-fill" id="prog"></div></div>
+    <button class="btn idle" id="btn" onclick="toggleLectura()">🎤 Pulsa para leer</button>
   </div>
 
-  <button class="btn idle" id="btn" onclick="toggleLectura()">🎤 Pulsa para leer</button>
-
-  <div class="result" id="result">
-    <div class="result-header">
-      <span style="font-size:18px" id="result-emoji">⭐</span>
-      <span class="result-title" id="result-title">¡Muy bien!</span>
+  <!-- Fin de sesión: mensaje amable para el alumno, sin datos numéricos.
+       El detalle (PPM, errores, niveles…) lo ve el docente en verificar/panel. -->
+  <div class="overlay" id="overlay">
+    <div class="overlay-card">
+      <div class="overlay-emoji" id="result-emoji">⭐</div>
+      <div class="overlay-title" id="result-title">¡Muy bien!</div>
+      <div class="overlay-sub" id="overlay-sub">Guardando la lectura…</div>
+      <div class="overlay-btns">
+        <button class="btn azul" id="verificar-btn" onclick="irVerificar()" disabled>✔ Verificar sesión</button>
+        <button class="btn gris" onclick="window.location.href='panel.html'">Volver al panel</button>
+      </div>
+      <button class="link-min" id="dbg-btn" onclick="descargarDiag()">Descargar diagnóstico</button>
     </div>
-
-    <div class="result-grid">
-      <div class="result-item"><div class="result-n ok" id="r-ppm">—</div><div class="result-l">palabras/min</div></div>
-      <div class="result-item"><div class="result-n ok" id="r-prec">—</div><div class="result-l">precisión</div></div>
-    </div>
-
-    <div class="grupo-titulo">Exactitud lectora</div>
-    <div class="result-grid-4">
-      <div class="result-item"><div class="result-n warn" id="r-omisiones">0</div><div class="result-l">omisiones</div></div>
-      <div class="result-item"><div class="result-n warn" id="r-sustituciones">0</div><div class="result-l">sustituc.</div></div>
-      <div class="result-item"><div class="result-n warn" id="r-adiciones">0</div><div class="result-l">adiciones</div></div>
-      <div class="result-item"><div class="result-n warn" id="r-inversiones">0</div><div class="result-l">inversiones</div></div>
-    </div>
-
-    <div class="grupo-titulo">Fluidez lectora</div>
-    <div class="result-grid-4">
-      <div class="result-item"><div class="result-n warn" id="r-repeticiones">0</div><div class="result-l">repetic.</div></div>
-      <div class="result-item"><div class="result-n warn" id="r-rectificaciones">0</div><div class="result-l">rectificac.</div></div>
-      <div class="result-item"><div class="result-n warn" id="r-vacilaciones">0</div><div class="result-l">vacilac.</div></div>
-      <div class="result-item"><div class="result-n warn" id="r-pausas">0</div><div class="result-l">pausas</div></div>
-    </div>
-
-    <div class="accuracy-bar">
-      <div class="accuracy-label"><span>Fluidez (Azure)</span><span id="fluency-val">—</span></div>
-      <div class="accuracy-track"><div class="accuracy-fill" id="fluency-bar" style="width:0%"></div></div>
-    </div>
-    <div class="accuracy-bar">
-      <div class="accuracy-label"><span>Entonación (Azure)</span><span id="prosody-val">—</span></div>
-      <div class="accuracy-track"><div class="accuracy-fill" id="prosody-bar" style="width:0%"></div></div>
-    </div>
-
-    <div class="error-list" id="detalle-errores" style="display:none; margin-top:0.75rem;">
-      <div class="error-titulo">Detalle de la lectura</div>
-      <div id="lista-errores"></div>
-    </div>
-    <div class="guardado" id="guardado">✓ Sesión guardada</div>
   </div>
 </div>
 
@@ -373,12 +257,11 @@ const lecturaPendiente  = lecturasDelCurso.find(l => !lecturasHechas.has(l.id));
 const lecturaActual     = lecturaPendiente || lecturasDelCurso[0];
 const numLectura        = lecturasDelCurso.findIndex(l => l.id === lecturaActual.id) + 1;
 
-document.getElementById("nivel-badge").textContent  = "Lectura " + numLectura + "/" + lecturasDelCurso.length;
-document.getElementById("materia-badge").textContent = lecturaActual.materia;
+document.getElementById("nivel-badge").textContent   = "Lectura " + numLectura + "/" + lecturasDelCurso.length;
+document.getElementById("materia-linea").textContent = lecturaActual.materia + " · " + lecturaActual.titulo;
 
 const textOriginal = lecturaActual.texto;
 const palabras     = textOriginal.split(" ");
-document.getElementById("palabras-count").textContent = palabras.length + " palabras";
 
 const textoEl = document.getElementById("texto");
 palabras.forEach((p, i) => {
@@ -407,6 +290,7 @@ let mediaRecorder = null;
 let audioChunks   = [];
 let micStream     = null;
 let audioListo    = null;       // Promise que resuelve al Blob grabado (o null)
+let ultimaSesionId = null;      // id de la sesión guardada (para "Verificar")
 
 // ─── Toggle ──────────────────────────────────────────────────────────────────
 function toggleLectura() {
@@ -425,15 +309,10 @@ async function iniciar() {
   segundos     = 0;
   palabras.forEach((_, i) => {
     const s = document.getElementById("w" + i);
-    if (s) { s.className = "word"; delete s.dataset.tip; }
+    if (s) s.className = "word";
   });
   document.getElementById("prog-wrap").classList.add("listening");
-  document.getElementById("prog-label").textContent = "Escuchando... lee con calma";
-  document.getElementById("ppm").textContent        = "—";
-  document.getElementById("tiempo").textContent     = "0s";
-  document.getElementById("estado").textContent     = "🎧";
-  document.getElementById("result").classList.remove("show");
-  document.getElementById("guardado").classList.remove("show");
+  document.getElementById("overlay").classList.remove("show");
 
   grabando = true;
   inicio   = Date.now();
@@ -441,12 +320,10 @@ async function iniciar() {
   const btn = document.getElementById("btn");
   btn.className   = "btn recording";
   btn.textContent = "⏹ Leyendo... pulsa para terminar";
-  document.getElementById("mascot").textContent = "🎤";
-  document.getElementById("msg").textContent    = "¡Te escucho! Sigue leyendo...";
+  document.getElementById("msg").textContent = "¡Te escucho! Sigue leyendo con calma…";
 
   timer = setInterval(() => {
     segundos = Math.round((Date.now() - inicio) / 1000);
-    document.getElementById("tiempo").textContent = segundos + "s";
     if (segundos >= 300) parar();
   }, 1000);
 
@@ -507,8 +384,7 @@ async function iniciar() {
         if (et === "Omission") return;
         allWords.push(w);
       });
-      // Feedback ligero: cuántas palabras llevamos oídas (sin colorear)
-      document.getElementById("estado").textContent = allWords.length + " 👂";
+      // Nada visible para el alumno mientras lee: solo acumulamos en segundo plano
     };
 
     recognizer.canceled = (s, e) => {
@@ -551,8 +427,7 @@ function parar() {
   btn.className   = "btn finished";
   btn.textContent = "⏳ Finalizando...";
   btn.disabled    = true;
-  document.getElementById("mascot").textContent = "🔍";
-  document.getElementById("msg").textContent    = "Procesando resultados...";
+  document.getElementById("msg").textContent = "Procesando la lectura…";
 
   if (recognizer) {
     recognizer.stopContinuousRecognitionAsync(
@@ -577,76 +452,33 @@ function mostrarResultados() {
   const res = MotorLectura.analizar(entradaMotor);
   const m   = res.metricas;
 
-  // 1. Reset de spans y pintado de las marcas que propone el motor
-  palabras.forEach((_, i) => { const s = document.getElementById("w"+i); if (s) { s.className = "word"; delete s.dataset.tip; } });
-  res.ui.porPalabra.forEach(p => {
-    const s = document.getElementById("w" + p.origIdx);
-    if (!s) return;
-    s.className = "word" + (p.clase ? " " + p.clase : "");
-    if (p.tip) s.dataset.tip = p.tip;
-  });
+  // Reset de las marcas del texto: al alumno NO se le pintan los fallos.
+  palabras.forEach((_, i) => { const s = document.getElementById("w"+i); if (s) s.className = "word"; });
 
-  // 2. Métricas globales
-  document.getElementById("r-ppm").textContent           = m.ppm || "—";
-  document.getElementById("r-prec").textContent          = m.precision + "%";
-  document.getElementById("r-omisiones").textContent     = m.omisiones;
-  document.getElementById("r-sustituciones").textContent = m.sustituciones;
-  document.getElementById("r-adiciones").textContent     = m.adiciones;
-  document.getElementById("r-inversiones").textContent   = m.inversiones;
-  document.getElementById("r-repeticiones").textContent  = m.repeticiones;
-  document.getElementById("r-rectificaciones").textContent = m.rectificaciones;
-  document.getElementById("r-vacilaciones").textContent  = m.vacilaciones;
-  document.getElementById("r-pausas").textContent        = m.pausasLargas;
-  document.getElementById("fluency-val").textContent     = m.fluency + "/100";
-  document.getElementById("fluency-bar").style.width     = m.fluency + "%";
-  document.getElementById("prosody-val").textContent     = m.prosody ? m.prosody + "/100" : "n/d";
-  document.getElementById("prosody-bar").style.width     = m.prosody + "%";
-
+  // Mensaje de ánimo (sin números ni marcas de error). El detalle —PPM,
+  // errores, niveles— lo revisa el docente en verificar.html y en el panel.
   const totalErr     = m.omisiones + m.sustituciones + m.inversiones;
   const totalFluidez = m.repeticiones + m.vacilaciones;
   const totalTodo    = totalErr + totalFluidez;
   const [emoji, titulo] =
-    m.leidas === 0                     ? ["🤔", "No se detectó la lectura"] :
+    m.leidas === 0                     ? ["🙂", "¡Gracias por leer!"] :
     totalTodo === 0                    ? ["🌟", "¡Lectura perfecta!"] :
     (totalErr === 0 && totalTodo <= 3) ? ["⭐", "¡Muy bien!"] :
     (totalErr <= 2 && totalTodo <= 5)  ? ["⭐", "¡Muy bien!"] :
     totalErr <= 5                      ? ["👏", "¡Buen trabajo!"] :
                                          ["💪", "¡Sigue practicando!"];
+
   document.getElementById("result-emoji").textContent = emoji;
   document.getElementById("result-title").textContent = titulo;
-
-  // 3. Detalle: errores de exactitud + observaciones de fluidez
-  const todo = res.ui.errores.concat(res.ui.observaciones);
-  if (todo.length > 0) {
-    document.getElementById("detalle-errores").style.display = "block";
-    document.getElementById("lista-errores").innerHTML = todo.map(e => {
-      const tag =
-        e.tipo === "omision"     ? '<span class="tag tag-omision">Omisión</span>' :
-        e.tipo === "inversion"   ? '<span class="tag tag-inversion">Inversión</span>' :
-        e.tipo === "sustitucion" ? '<span class="tag tag-sustitucion">Sustitución</span>' :
-        e.tipo === "vacilacion"  ? '<span class="tag tag-vacilacion">Vacilación</span>' :
-        e.tipo === "rectificacion" ? '<span class="tag tag-vacilacion">Rectificación</span>' :
-        e.tipo === "repeticion"  ? '<span class="tag tag-repeticion">Repetición</span>' : '';
-      const extra = (e.dicho && e.tipo !== "omision")
-        ? ` <span style="color:#c0c0c0">→ ${e.dicho}</span>`
-        : (e.motivo === "pausa" ? ` <span style="color:#c0c0c0">(pausa antes)</span>` : "");
-      return `<div class="error-row"><span>${e.word}${extra}</span>${tag}</div>`;
-    }).join("");
-  } else {
-    document.getElementById("detalle-errores").style.display = "none";
-  }
-
-  document.getElementById("result").classList.add("show");
-  document.getElementById("mascot").textContent = emoji;
-  document.getElementById("msg").textContent    = "¡Sesión completada!";
-  document.getElementById("estado").textContent = "✓";
-  document.getElementById("prog-label").textContent = m.leidas + "/" + palabras.length + " palabras leídas";
+  document.getElementById("overlay-sub").textContent  = "Guardando la lectura…";
+  document.getElementById("verificar-btn").disabled   = true;
+  document.getElementById("overlay").classList.add("show");
+  document.getElementById("msg").textContent = "Lee el texto en voz alta cuando estés listo";
   resetBtn();
 
   guardarSesion(m, res.detallePalabras, entradaMotor);
 
-  // 4. Diagnóstico descargable: datos crudos de Azure + alineamiento, para
-  // poder afinar la herramienta contra lecturas reales con errores conocidos.
+  // Diagnóstico descargable (crudo de Azure + alineamiento) para el docente.
   window.__lectoria_diag = {
     version: MotorLectura.VERSION,
     fecha: new Date().toISOString(),
@@ -657,21 +489,6 @@ function mostrarResultados() {
     alineamiento: res.diag.alineamiento,
     metricas: m
   };
-  let dbgBtn = document.getElementById("dbg-btn");
-  if (!dbgBtn) {
-    dbgBtn = document.createElement("button");
-    dbgBtn.id = "dbg-btn";
-    dbgBtn.textContent = "⬇ Descargar diagnóstico de la sesión";
-    dbgBtn.style.cssText = "margin-top:10px;width:100%;padding:8px;border-radius:8px;border:0.5px solid #d1d5db;background:#fff;color:#6b7280;font-size:12px;cursor:pointer";
-    dbgBtn.onclick = () => {
-      const blob = new Blob([JSON.stringify(window.__lectoria_diag, null, 2)], { type: "application/json" });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = "diagnostico_" + (lecturaActual.id || "sesion") + "_" + Date.now() + ".json";
-      a.click();
-    };
-    document.getElementById("result").appendChild(dbgBtn);
-  }
 }
 
 // ─── Guardar sesión (audio + métricas + detalle palabra a palabra) ───────────
@@ -681,7 +498,7 @@ async function guardarSesion(m, detallePalabras, entradaMotor) {
     if (!usuarioActual) {
       const { data } = await sb.auth.getSession();
       usuarioActual = data.session?.user || null;
-      if (!usuarioActual) { console.error("Sin sesión de usuario: no se puede guardar"); return; }
+      if (!usuarioActual) { console.error("Sin sesión de usuario: no se puede guardar"); errorGuardado(); return; }
     }
     const sesionId = crypto.randomUUID();
 
@@ -738,7 +555,7 @@ async function guardarSesion(m, detallePalabras, entradaMotor) {
       audio_path:        audioPath,
       fecha:             new Date().toISOString()
     });
-    if (error) { console.error("Supabase error:", error); return; }
+    if (error) { console.error("Supabase error:", error); errorGuardado(); return; }
 
     // 3. Guardar el detalle palabra a palabra (lo que revisará el docente)
     if (detallePalabras && detallePalabras.length > 0) {
@@ -747,24 +564,37 @@ async function guardarSesion(m, detallePalabras, entradaMotor) {
       if (eDet) console.error("Error guardando el detalle de palabras:", eDet);
     }
 
-    document.getElementById("guardado").classList.add("show");
     const ses = JSON.parse(localStorage.getItem("sesiones_" + alumnoGuardado) || "[]");
     ses.push({ texto_id: lecturaActual.id });
     localStorage.setItem("sesiones_" + alumnoGuardado, JSON.stringify(ses));
 
-    // 4. Botón para pasar a la verificación docente
-    let vBtn = document.getElementById("verificar-btn");
-    if (!vBtn) {
-      vBtn = document.createElement("button");
-      vBtn.id = "verificar-btn";
-      vBtn.style.cssText = "margin-top:10px;width:100%;padding:12px;border-radius:10px;border:none;background:#378ADD;color:#fff;font-size:14px;font-weight:500;cursor:pointer";
-      document.getElementById("result").appendChild(vBtn);
-    }
-    vBtn.textContent = "✔ Verificar sesión (hoja de registro)";
-    vBtn.onclick = () => window.location.href = "verificar.html?sesion=" + sesionId;
+    // Sesión guardada: habilitamos el paso a la verificación docente
+    ultimaSesionId = sesionId;
+    document.getElementById("overlay-sub").textContent = "Lectura guardada correctamente.";
+    document.getElementById("verificar-btn").disabled  = false;
   } catch (e) {
     console.error("Error guardando sesión:", e);
+    errorGuardado();
   }
+}
+
+function errorGuardado() {
+  const sub = document.getElementById("overlay-sub");
+  if (sub) sub.textContent = "No se pudo guardar la lectura. Revisa la conexión e inténtalo de nuevo.";
+}
+
+// El alumno no ve datos; estos botones son para el docente al terminar
+function irVerificar() {
+  if (ultimaSesionId) window.location.href = "verificar.html?sesion=" + ultimaSesionId;
+}
+
+function descargarDiag() {
+  if (!window.__lectoria_diag) return;
+  const blob = new Blob([JSON.stringify(window.__lectoria_diag, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "diagnostico_" + (lecturaActual.id || "sesion") + "_" + Date.now() + ".json";
+  a.click();
 }
 
 function resetBtn() {
