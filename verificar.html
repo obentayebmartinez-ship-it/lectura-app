@@ -25,19 +25,22 @@
   .sesion-meta { font-size: 12px; color: #6b7280; margin-top: 2px; }
   .chip { font-size: 11px; padding: 3px 10px; border-radius: 20px; font-weight: 500; background: #f3f4f6; color: #374151; }
   audio { width: 100%; margin-top: 0.75rem; height: 36px; }
-  .leyenda { display: flex; gap: 6px; margin: 0.75rem 0 0; flex-wrap: wrap; }
-  .ley-item { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: #6b7280; font-family: inherit; background: none; border: 0.5px solid transparent; border-radius: 20px; padding: 3px 8px; cursor: pointer; transition: background .15s, border-color .15s; }
-  .ley-item:hover { background: #f3f4f6; }
-  .ley-item.sel { background: #f3f4f6; border-color: #d1d5db; color: #374151; }
+  .leyenda-tit { font-size: 11px; color: #9ca3af; margin: 1rem 0 0.4rem; }
+  .leyenda { display: flex; gap: 6px; flex-wrap: wrap; }
+  .ley-item { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: #6b7280; font-family: inherit; background: #fff; border: 0.5px solid #e5e7eb; border-radius: 20px; padding: 4px 10px; cursor: pointer; transition: background .15s, border-color .15s; }
+  .ley-item:hover { background: #f9fafb; border-color: #d1d5db; }
+  .ley-item.sel { background: #f3f4f6; border-color: #9ca3af; color: #111; font-weight: 500; }
   .ley-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
-  .ley-info { display: inline-flex; align-items: center; justify-content: center; width: 13px; height: 13px; border-radius: 50%; background: #e5e7eb; color: #6b7280; font-size: 9px; font-weight: 700; }
-  .ley-item.sel .ley-info { background: #378ADD; color: #fff; }
-  .ley-exp { display: none; margin: 0.6rem 0 0; font-size: 12.5px; color: #374151; line-height: 1.5; background: #f9fafb; border-left: 3px solid #ccc; border-radius: 0 8px 8px 0; padding: 9px 12px; animation: leyIn .15s ease; }
+  .ley-exp { display: none; position: relative; margin-top: 0.75rem; font-size: 13px; color: #374151; line-height: 1.5; background: #fff; border: 0.5px solid #e5e7eb; border-left: 3px solid #ccc; border-radius: 10px; padding: 13px 40px 13px 15px; box-shadow: 0 4px 18px rgba(0,0,0,0.06); }
   .ley-exp.show { display: block; }
-  .ley-exp b { color: #111; }
-  .ley-exp .ej { color: #6b7280; font-style: italic; }
-  .ley-exp-dot { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
-  @keyframes leyIn { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+  .ley-exp-cab { margin-bottom: 5px; }
+  .ley-exp-cab b { color: #111; font-weight: 600; font-size: 14px; }
+  .ley-exp-def { color: #374151; }
+  .ley-exp-ej { color: #6b7280; font-style: italic; margin-top: 5px; }
+  .ley-exp-ej .ej-lab { font-style: normal; font-weight: 500; color: #9ca3af; margin-right: 3px; }
+  .ley-exp-dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 7px; vertical-align: middle; }
+  .ley-exp-close { position: absolute; top: 9px; right: 9px; width: 24px; height: 24px; border: none; background: #f3f4f6; color: #6b7280; border-radius: 7px; font-size: 16px; line-height: 1; cursor: pointer; transition: background .15s; }
+  .ley-exp-close:hover { background: #e5e7eb; color: #374151; }
   .reading { font-size: 18px; line-height: 2.1; color: #111; }
   .word { display: inline; border-radius: 3px; padding: 1px 4px; cursor: pointer; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
   .word:hover { outline: 1.5px solid #378ADD; }
@@ -255,11 +258,12 @@ function render() {
         </div>
         <div class="card">
           <div class="card-title">Lectura — pulsa cualquier palabra para escucharla o corregir su marca</div>
+          <div class="reading" id="reading"></div>
+          <div class="leyenda-tit">Tipos de marca — pulsa una para ver qué es</div>
           <div class="leyenda">
-            ${LEYENDA.map(l => `<button class="ley-item" data-tipo="${l.tipo}" onclick="explicarError('${l.tipo}')"><span class="ley-dot" style="background:${l.color}"></span>${TIPOS[l.tipo].label} <span class="ley-info">?</span></button>`).join("")}
+            ${LEYENDA.map(l => `<button class="ley-item" data-tipo="${l.tipo}" onclick="explicarError('${l.tipo}')"><span class="ley-dot" style="background:${l.color}"></span>${TIPOS[l.tipo].label}</button>`).join("")}
           </div>
           <div class="ley-exp" id="ley-exp"></div>
-          <div class="reading" id="reading"></div>
         </div>
       </div>
       <div>
@@ -324,22 +328,34 @@ function setNivel(key, n) {
 }
 
 // ─── Leyenda: explicar un tipo de error al pulsarlo ──────────────────────────
+// El cuadro se queda abierto hasta que se cierra con la × o pulsando fuera.
 function explicarError(tipo) {
-  const box = document.getElementById("ley-exp");
-  const items = document.querySelectorAll(".ley-item");
-  if (leyExpSel === tipo) {                 // segundo clic: cerrar
-    leyExpSel = null;
-    box.classList.remove("show");
-    items.forEach(b => b.classList.remove("sel"));
-    return;
-  }
   leyExpSel = tipo;
-  items.forEach(b => b.classList.toggle("sel", b.dataset.tipo === tipo));
+  document.querySelectorAll(".ley-item").forEach(b => b.classList.toggle("sel", b.dataset.tipo === tipo));
   const l = LEYENDA.find(x => x.tipo === tipo);
+  const box = document.getElementById("ley-exp");
   box.style.borderLeftColor = l.color;
-  box.innerHTML = `<span class="ley-exp-dot" style="background:${l.color}"></span><b>${TIPOS[tipo].label}</b> — ${l.def} <span class="ej">Ej.: ${l.ej}</span>`;
+  box.innerHTML = `
+    <button class="ley-exp-close" onclick="cerrarExplicacion()" aria-label="Cerrar">×</button>
+    <div class="ley-exp-cab"><span class="ley-exp-dot" style="background:${l.color}"></span><b>${TIPOS[tipo].label}</b></div>
+    <div class="ley-exp-def">${l.def}</div>
+    <div class="ley-exp-ej"><span class="ej-lab">Ejemplo:</span>${l.ej}</div>`;
   box.classList.add("show");
 }
+
+function cerrarExplicacion() {
+  leyExpSel = null;
+  const box = document.getElementById("ley-exp");
+  if (box) box.classList.remove("show");
+  document.querySelectorAll(".ley-item").forEach(b => b.classList.remove("sel"));
+}
+
+// Cerrar el cuadro al pulsar fuera de él (y fuera de los chips de la leyenda)
+document.addEventListener("click", ev => {
+  if (leyExpSel && !ev.target.closest(".ley-item") && !ev.target.closest("#ley-exp")) {
+    cerrarExplicacion();
+  }
+});
 
 // ─── Menú de corrección por palabra ──────────────────────────────────────────
 function abrirMenu(ev, i) {
