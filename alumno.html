@@ -202,7 +202,6 @@ const DIMENSIONES = [
 ];
 
 const params = new URLSearchParams(window.location.search);
-const DEMO = params.get("demo") === "1";
 const alumnoIdParam = params.get("id") || "";
 let alumnoNombre = params.get("alumno") || "";
 let alumnoCurso = params.get("curso") || "2P";
@@ -216,8 +215,6 @@ const fmtDur = seg => {
 };
 
 async function init() {
-  if (DEMO) { const d = cargarDemo(); render(d); return; }
-
   const { data } = await sb.auth.getSession();
   if (!data.session) { window.location.href = "login.html"; return; }
 
@@ -468,38 +465,6 @@ function renderPropuesta(ses, ultimaVerif) {
 
 function generarPDF() {
   InformeLectorIA.generar({ nombre: alumnoNombre, curso: alumnoCurso, sesiones: todasLasSesiones });
-}
-
-// ─── Modo demo (?demo=1): datos ficticios para ver la pantalla sin BD ─────────
-// Quitar antes de lanzar, igual que el de verificar.html.
-function cargarDemo() {
-  alumnoNombre = "Alumno de Prueba";
-  alumnoCurso = "2P";
-  const base = [62, 68, 65, 74, 71, 79, 84, 88];
-  const dia = 24 * 3600 * 1000;
-  return base.map((ppm, i) => ({
-    id: "demo-" + i,
-    fecha: new Date(Date.now() - (base.length - i) * 6 * dia).toISOString(),
-    texto_id: "2p-0" + ((i % 8) + 1),
-    ppm,
-    precision: 86 + (i % 3) * 4,
-    fluency: 60 + i * 3,
-    prosody: 50 + i * 4,
-    omisiones: [3, 2, 3, 1, 2, 1, 0, 1][i],
-    sustituciones: [2, 2, 1, 2, 1, 1, 1, 0][i],
-    repeticiones: [1, 0, 2, 1, 0, 1, 0, 0][i],
-    vacilaciones: [2, 1, 1, 0, 1, 0, 1, 0][i],
-    rectificaciones: [0, 1, 0, 1, 0, 0, 0, 1][i],
-    adiciones: [1, 0, 0, 0, 1, 0, 0, 0][i],
-    inversiones: [0, 0, 1, 0, 0, 0, 0, 0][i],
-    duracion_segundos: 95 - i * 4,
-    estado: i === 3 || i === 6 ? "verificada" : "analizada",
-    niveles: i === 3
-      ? { silabeo: 2, pausas_entonacion: 1, vacilacion: 2, rectificacion: 1, repeticion: 2, velocidad: 1, sustitucion: 2, omisiones: 2, inversion: 1, adicion: 1, rotacion: 1, comprension: 2 }
-      : i === 6
-      ? { silabeo: 1, pausas_entonacion: 2, vacilacion: 1, rectificacion: 1, repeticion: 1, velocidad: 2, sustitucion: 1, omisiones: 1, inversion: 1, adicion: 1, rotacion: 1, comprension: 2 }
-      : null
-  }));
 }
 
 init();

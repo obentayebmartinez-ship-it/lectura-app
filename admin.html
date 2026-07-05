@@ -76,8 +76,6 @@
 
 <script>
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-const params = new URLSearchParams(window.location.search);
-const DEMO = params.get("demo") === "1";
 
 const CURSOS = ["1P", "2P", "3P", "4P", "5P", "6P"];
 const NOMBRE_CURSO = { "1P": "1º Primaria", "2P": "2º Primaria", "3P": "3º Primaria", "4P": "4º Primaria", "5P": "5º Primaria", "6P": "6º Primaria" };
@@ -107,8 +105,6 @@ function resumen(valores) {
 }
 
 async function init() {
-  if (DEMO) { const d = cargarDemo(); usuarios = d.usuarios; alumnos = d.alumnos; procesar(d.sesiones); rerender(); return; }
-
   const { data } = await sb.auth.getSession();
   if (!data.session) { window.location.href = "login.html"; return; }
 
@@ -536,52 +532,6 @@ function dibujarUso(ses) {
       }
     }
   }));
-}
-
-// ─── Demo (?demo=1): varios usuarios, cursos y alumnos sintéticos ─────────────
-function cargarDemo() {
-  const usrs = [
-    { id: "us-1", email: "gabinete.norte@ejemplo.com", nombre: "Gabinete Norte", creado: null },
-    { id: "us-2", email: "logopedia.sur@ejemplo.com", nombre: "Logopedia Sur", creado: null },
-    { id: "us-3", email: "ana.psicopedagoga@ejemplo.com", nombre: "Ana (psicopedagoga)", creado: null },
-    { id: "us-4", email: "nuevo.centro@ejemplo.com", nombre: "Centro Nuevo", creado: null }
-  ];
-  const als = [], ses = [];
-  const dia = 86400000;
-  const cfg = { "1P": { alum: 6, base: 42, obj: 65 }, "2P": { alum: 7, base: 66, obj: 90 }, "3P": { alum: 5, base: 84, obj: 105 } };
-  const textos = { "1P": ["Mi familia", "Las frutas", "Los colores", "El cuerpo humano", "Los sentidos"], "2P": ["Las abejas", "El agua", "El mercado", "Los dinosaurios", "Las plantas"], "3P": ["Los volcanes", "El sistema solar", "El reciclaje", "Los oficios", "Los seres vivos"] };
-  let uid = 0;
-  Object.entries(cfg).forEach(([curso, c]) => {
-    for (let a = 0; a < c.alum; a++) {
-      const id = "al-" + (uid++);
-      // Reparte alumnos entre los 3 primeros usuarios (el 4º queda sin alumnos)
-      const user_id = usrs[uid % 3].id;
-      als.push({ id, user_id, curso });
-      const nLect = 4 + Math.floor(Math.random() * 6);
-      const arranque = c.base + Math.round((Math.random() - 0.5) * 20);
-      const ritmo = 2 + Math.random() * 4;
-      for (let i = 0; i < nLect; i++) {
-        const ppm = Math.max(20, Math.round(arranque + i * ritmo + (Math.random() - 0.5) * 8));
-        const prec = Math.min(99, Math.round(80 + i * 1.5 + Math.random() * 8));
-        const errBase = Math.max(0, 5 - i);
-        const verif = i % 3 === 0;
-        ses.push({
-          id: `s-${uid}-${i}`, user_id, alumno_id: id,
-          curso, texto_id: curso.toLowerCase() + "-" + i, texto_titulo: textos[curso][i % 5],
-          ppm, precision: prec, fluency: Math.round(prec * 0.7 + Math.random() * 15), prosody: Math.round(45 + i * 3 + Math.random() * 20),
-          omisiones: Math.round(Math.random() * errBase), sustituciones: Math.round(Math.random() * errBase),
-          inversiones: Math.random() < 0.2 ? 1 : 0, adiciones: Math.random() < 0.3 ? 1 : 0,
-          repeticiones: Math.round(Math.random() * 2), rectificaciones: Math.random() < 0.4 ? 1 : 0,
-          vacilaciones: Math.round(Math.random() * 2),
-          duracion_segundos: 80 + Math.round(Math.random() * 60),
-          estado: verif ? "verificada" : "analizada",
-          niveles: verif ? { velocidad: ppm >= c.obj ? 3 : ppm >= c.obj * 0.8 ? 2 : 1, comprension: 1 + Math.round(Math.random() * 2) } : null,
-          fecha: new Date(Date.now() - (nLect - i) * 5 * dia - a * dia).toISOString()
-        });
-      }
-    }
-  });
-  return { usuarios: usrs, alumnos: als, sesiones: ses };
 }
 
 init();

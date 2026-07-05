@@ -96,7 +96,6 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const params   = new URLSearchParams(window.location.search);
 const sesionId = params.get("sesion") || "";
-const DEMO     = params.get("demo") === "1";
 
 // ─── Tipos de palabra: etiqueta, clase CSS y si el docente puede asignarlos ──
 const TIPOS = {
@@ -146,7 +145,6 @@ let hayCambios = false;
 
 // ─── Carga ───────────────────────────────────────────────────────────────────
 async function init() {
-  if (DEMO) { cargarDemo(); render(); return; }
   if (!sesionId) { document.getElementById("contenido").innerHTML = "<div class='loading'>Falta el parámetro de sesión</div>"; return; }
 
   const { data } = await sb.auth.getSession();
@@ -252,7 +250,7 @@ function render() {
           <div id="hoja"></div>
           <div class="nota">Los niveles con datos se han calculado automáticamente y puedes corregirlos.
           Silabeo, rotación y comprensión requieren tu observación directa.</div>
-          <button class="btn-guardar" id="btn-guardar" onclick="guardarVerificacion()" ${DEMO ? "disabled" : ""}>💾 Guardar verificación</button>
+          <button class="btn-guardar" id="btn-guardar" onclick="guardarVerificacion()">💾 Guardar verificación</button>
           <div class="guardado-ok" id="guardado-ok">✓ Verificación guardada — esta sesión pasa al dataset</div>
         </div>
       </div>
@@ -398,24 +396,6 @@ async function guardarVerificacion() {
   } else {
     alert("Hubo " + fallos + " error(es) al guardar. Revisa la conexión e inténtalo de nuevo.");
   }
-}
-
-// ─── Modo demo (?demo=1): datos ficticios para ver la pantalla sin BD ────────
-function cargarDemo() {
-  sesion = {
-    alumno_nombre: "Alumno de Prueba", curso: "2P", texto_titulo: "Las abejas",
-    fecha: new Date().toISOString(), ppm: 74, precision: 91, prosody: 62,
-    niveles: null, _audioUrl: null
-  };
-  const texto = "Las abejas son insectos que viven en colonias. Dentro de la colmena trabajan juntas para producir miel. La abeja reina pone huevos y las obreras cuidan la colmena.".split(" ");
-  const tipos = { 2: "sustitucion", 5: "vacilacion", 9: "omision", 13: "repeticion", 19: "rectificacion", 24: "inversion" };
-  palabras = texto.map((w, i) => ({
-    id: i + 1, idx: i, palabra_ref: w,
-    palabra_dicha: tipos[i] === "omision" ? null : (tipos[i] === "sustitucion" ? "abuelas" : w),
-    tipo_ia: tipos[i] || "correcta", tipo_verificado: null,
-    accuracy: tipos[i] ? 40 : 95, offset_ms: i * 600, duracion_ms: 400, gap_ms: 80
-  }));
-  palabras.splice(7, 0, { id: 900, idx: -1, palabra_ref: null, palabra_dicha: "eh", tipo_ia: "adicion", tipo_verificado: null, accuracy: null, offset_ms: 4200, duracion_ms: 200, gap_ms: null });
 }
 
 init();
