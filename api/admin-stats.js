@@ -61,8 +61,13 @@ export default async function handler(req, res) {
   try {
     const base = process.env.SUPABASE_URL;
     const serviceKey = process.env.SUPABASE_SERVICE_KEY;
-    if (!base || !serviceKey) {
-      return res.status(500).json({ error: "Faltan SUPABASE_URL o SUPABASE_SERVICE_KEY en el servidor" });
+    const faltan = [];
+    if (!base) faltan.push("SUPABASE_URL");
+    if (!serviceKey) faltan.push("SUPABASE_SERVICE_KEY");
+    if (!process.env.SUPABASE_ANON_KEY) faltan.push("SUPABASE_ANON_KEY");
+    if (!process.env.ADMIN_EMAILS) faltan.push("ADMIN_EMAILS");
+    if (faltan.length) {
+      return res.status(500).json({ error: "Faltan estas variables de entorno en Vercel: " + faltan.join(", ") });
     }
 
     // 1. Verificar la sesión de Supabase del que llama
