@@ -38,7 +38,11 @@ verificación de sesión Supabase en el endpoint. **No desplegar a Vercel hasta
 entonces**, o los usuarios reales no tendrán reconocimiento.
 
 ## Modelo / rendimiento
-- `medium` en CPU int8 (RTX 3050 = 4 GB, no cabe large-v3 en GPU).
-- ~8-9 s por lectura en CPU. Para acelerar: GPU con cuBLAS/cuDNN → 1-2 s.
-- Cambiar modelo/dispositivo con variables de entorno `WHISPER_MODEL` /
-  `WHISPER_DEVICE` antes de arrancar el servidor.
+- `medium` en **GPU** (RTX 3050, CUDA) por defecto → ~1-2 s por lectura, usa
+  ~0.8 GB de los 4 GB de VRAM. En CPU serian ~8-9 s.
+- Las librerias CUDA (cuBLAS/cuDNN 9) estan como paquetes pip en el venv
+  (`nvidia-cublas-cu12`, `nvidia-cudnn-cu12`); `servidor.py` registra sus DLLs
+  al arrancar (`_registrar_dlls_cuda`). No hace falta instalar el CUDA Toolkit.
+- Si la GPU diera problemas, cambia `WHISPER_DEVICE` a `cpu` en el lanzador.
+- `large-v3` (mas preciso) NO cabe en 4 GB de GPU; se quedaria en CPU.
+- Diagnostico rapido de GPU: `.venv\Scripts\python.exe test_gpu.py`.

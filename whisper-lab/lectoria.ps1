@@ -18,7 +18,7 @@ $env:SUPABASE_URL      = 'https://smmnrxcpgynkrqaaogie.supabase.co'
 $env:SUPABASE_ANON_KEY = 'sb_publishable_AaNY-lUFZOtL13_W_QQ0nw_SPp-5Nj8'
 $env:ALLOWED_ORIGINS   = 'https://lectura-app-ivory.vercel.app,http://localhost:5500'
 $env:WHISPER_MODEL     = 'medium'
-$env:WHISPER_DEVICE    = 'cpu'
+$env:WHISPER_DEVICE    = 'cuda'   # GPU (RTX 3050). Si diera problemas, cambia a 'cpu'.
 
 function Puerto8000Ocupado {
   [bool](Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue)

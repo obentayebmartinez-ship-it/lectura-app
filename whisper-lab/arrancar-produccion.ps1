@@ -13,9 +13,9 @@ $env:SUPABASE_ANON_KEY = "sb_publishable_AaNY-lUFZOtL13_W_QQ0nw_SPp-5Nj8"
 $env:ALLOWED_ORIGINS   = "https://lectura-app-ivory.vercel.app,http://localhost:5500"
 
 # --- Modelo / dispositivo ---
-# medium en CPU int8 (~8-9 s/lectura). Si algun dia montas GPU: WHISPER_DEVICE=cuda
+# medium en GPU (RTX 3050) ~1-2 s/lectura. Si diera problemas, cambia a "cpu" (~9 s).
 $env:WHISPER_MODEL     = "medium"
-$env:WHISPER_DEVICE    = "cpu"
+$env:WHISPER_DEVICE    = "cuda"
 
 Write-Host "[LectorIA] Origenes CORS permitidos: $($env:ALLOWED_ORIGINS)" -ForegroundColor Cyan
 & "$PSScriptRoot\.venv\Scripts\python.exe" -m uvicorn servidor:app --host 127.0.0.1 --port 8000

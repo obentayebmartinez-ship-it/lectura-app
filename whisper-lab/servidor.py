@@ -18,10 +18,29 @@ Arranque:
     .venv\\Scripts\\python.exe -m uvicorn servidor:app --host 127.0.0.1 --port 8000
 """
 import os
+import sys
 import tempfile
 import httpx
 from fastapi import FastAPI, UploadFile, File, HTTPException, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
+
+
+def _registrar_dlls_cuda():
+    """En Windows, registra las carpetas de DLLs de CUDA (cublas/cudnn/nvrtc)
+    del venv para poder usar la GPU. Inofensivo en modo CPU (si no existen).
+    Debe ejecutarse ANTES de importar faster_whisper/ctranslate2."""
+    base = os.path.join(os.path.dirname(sys.executable), "..", "Lib", "site-packages", "nvidia")
+    for sub in ("cublas", "cudnn", "cuda_nvrtc", "cuda_runtime"):
+        d = os.path.abspath(os.path.join(base, sub, "bin"))
+        if os.path.isdir(d):
+            try:
+                os.add_dll_directory(d)
+            except (OSError, AttributeError):
+                pass
+            os.environ["PATH"] = d + os.pathsep + os.environ.get("PATH", "")
+
+
+_registrar_dlls_cuda()
 from faster_whisper import WhisperModel
 
 MODEL_NAME = os.environ.get("WHISPER_MODEL", "medium")
