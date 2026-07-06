@@ -11,5 +11,6 @@ const OBJETIVOS_PPM = { "1P": 65, "2P": 90, "3P": 105, "4P": 115, "5P": 125, "6P
 // Motor de reconocimiento propio (Whisper local) — sustituye a Azure Speech.
 // El navegador graba la lectura completa y la manda aquí; el servidor devuelve
 // las palabras con timestamps (misma forma que usaba Azure) y motor.js analiza.
-// DESARROLLO: servidor local. PRODUCCIÓN: cambiar por la URL pública del servidor.
-const WHISPER_API_URL = "http://127.0.0.1:8000";
+// PRODUCCIÓN: servidor Whisper en el PC del autor, expuesto por Cloudflare Tunnel.
+// (Para desarrollo local, cambia temporalmente a "http://127.0.0.1:8000".)
+const WHISPER_API_URL = "https://whisper.lectometro.com";

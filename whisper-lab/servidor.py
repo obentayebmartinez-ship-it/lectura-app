@@ -19,7 +19,8 @@ Arranque:
 """
 import os
 import tempfile
-from fastapi import FastAPI, UploadFile, File, HTTPException
+import httpx
+from fastapi import FastAPI, UploadFile, File, HTTPException, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from faster_whisper import WhisperModel
 
@@ -28,20 +29,56 @@ DEVICE = os.environ.get("WHISPER_DEVICE", "cpu")
 COMPUTE = "int8" if DEVICE == "cpu" else "int8_float16"
 TICKS = 10_000_000  # 1 s = 10.000.000 ticks de 100 ns (como Azure)
 
+# --- Verificacion de sesion (Supabase) ---
+# El endpoint /evaluar exige un JWT de Supabase valido, igual que hacia
+# api/azure-token.js: se valida contra ${SUPABASE_URL}/auth/v1/user.
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
+SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
+# Origenes permitidos para CORS (coma-separados). En produccion pon el dominio
+# de la app (p.ej. https://lectoria.vercel.app). Por defecto, desarrollo local.
+ALLOWED_ORIGINS = [
+    o.strip() for o in os.environ.get(
+        "ALLOWED_ORIGINS",
+        "http://localhost:5500,http://127.0.0.1:5500",
+    ).split(",") if o.strip()
+]
+
 print(f"[whisper] cargando modelo={MODEL_NAME} device={DEVICE} compute={COMPUTE} ...")
 model = WhisperModel(MODEL_NAME, device=DEVICE, compute_type=COMPUTE)
 print("[whisper] modelo listo")
+if not SUPABASE_URL or not SUPABASE_ANON_KEY:
+    print("[whisper] AVISO: SUPABASE_URL/SUPABASE_ANON_KEY sin definir → /evaluar "
+          "rechazara todo. Definelas antes de exponer el servidor.")
 
 app = FastAPI(title="LectorIA Whisper API")
 
-# CORS abierto para desarrollo local (frontend en localhost).
-# En produccion: restringir a tu dominio y anadir verificacion de sesion.
+# CORS restringido a los origenes de la app (evita que otras webs usen tu servidor).
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_methods=["POST", "GET", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
+
+
+async def verificar_sesion(authorization: str = Header(default="")):
+    """Valida el JWT de Supabase del header Authorization. Lanza 401 si no vale."""
+    if not SUPABASE_URL or not SUPABASE_ANON_KEY:
+        raise HTTPException(status_code=503, detail="servidor sin configurar (Supabase)")
+    if not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="falta el token de sesion")
+    token = authorization[7:].strip()
+    try:
+        async with httpx.AsyncClient(timeout=10) as cliente:
+            r = await cliente.get(
+                f"{SUPABASE_URL}/auth/v1/user",
+                headers={"Authorization": f"Bearer {token}", "apikey": SUPABASE_ANON_KEY},
+            )
+    except httpx.HTTPError:
+        raise HTTPException(status_code=502, detail="no se pudo verificar la sesion")
+    if r.status_code != 200:
+        raise HTTPException(status_code=401, detail="sesion invalida o caducada")
+    return r.json()  # datos del usuario (id, email, ...)
 
 
 @app.get("/salud")
@@ -50,7 +87,7 @@ def salud():
 
 
 @app.post("/evaluar")
-async def evaluar(audio: UploadFile = File(...)):
+async def evaluar(audio: UploadFile = File(...), usuario: dict = Depends(verificar_sesion)):
     datos = await audio.read()
     if not datos:
         raise HTTPException(status_code=400, detail="audio vacio")

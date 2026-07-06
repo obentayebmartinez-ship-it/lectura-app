@@ -1,0 +1,16 @@
+# Plantilla de configuracion de Cloudflare Tunnel para LectorIA.
+# Copiala a  C:\Users\<tu-usuario>\.cloudflared\config.yml  y rellena los <...>.
+#
+# Consigue el UUID y el fichero de credenciales con:
+#   cloudflared tunnel create lectoria-whisper
+# (crea  C:\Users\<tu-usuario>\.cloudflared\<UUID>.json)
+
+tunnel: <UUID-DEL-TUNEL>
+credentials-file: C:\Users\obent\.cloudflared\<UUID-DEL-TUNEL>.json
+
+ingress:
+  # Todo lo que llegue a este subdominio va al servidor Whisper local.
+  - hostname: whisper.TUDOMINIO.com
+    service: http://127.0.0.1:8000
+  # Regla final obligatoria: cualquier otra cosa -> 404.
+  - service: http_status:404

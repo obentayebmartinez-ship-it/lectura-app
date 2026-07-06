@@ -117,9 +117,18 @@ sb.auth.getSession().then(({ data }) => {
 // (Word/Offset/Duration/PronunciationAssessment) para que motor.js las analice.
 async function transcribirConWhisper(blob) {
   if (!blob) return [];
+  // El endpoint /evaluar exige sesión válida: mandamos el JWT de Supabase,
+  // que el servidor verifica contra ${SUPABASE_URL}/auth/v1/user.
+  const { data: sesionData } = await sb.auth.getSession();
+  const token = sesionData?.session?.access_token;
+  if (!token) throw new Error("Tu sesión ha caducado. Vuelve a iniciar sesión.");
   const fd = new FormData();
   fd.append("audio", blob, "lectura.webm");
-  const res = await fetch(WHISPER_API_URL + "/evaluar", { method: "POST", body: fd });
+  const res = await fetch(WHISPER_API_URL + "/evaluar", {
+    method: "POST",
+    headers: { "Authorization": "Bearer " + token },
+    body: fd,
+  });
   if (!res.ok) {
     const txt = await res.text().catch(() => "");
     throw new Error("El servidor de reconocimiento falló: " + (txt || res.status));
