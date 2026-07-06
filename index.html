@@ -7,6 +7,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
 <script src="motor.js"></script>
+<script src="preguntas.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
@@ -55,6 +56,24 @@ body { font-family: system-ui, sans-serif; background: #f5f5f0; color: #111; }
 .overlay-sub { font-size: 13px; color: #6b7280; margin-bottom: 1.5rem; }
 .overlay-btns { display: flex; flex-direction: column; gap: 8px; }
 .link-min { margin-top: 0.9rem; background: none; border: none; color: #9ca3af; font-size: 11px; cursor: pointer; text-decoration: underline; }
+/* Preguntas de comprensión: pantalla completa, botones grandes, sin marcar
+   aciertos/fallos (es una evaluación, no un juego) */
+.quiz { position: fixed; inset: 0; background: #f5f5f0; display: none; flex-direction: column; z-index: 90; padding: 1.1rem 1.1rem 1.4rem; }
+.quiz.show { display: flex; animation: ovIn .18s ease; }
+.quiz-top { max-width: 720px; width: 100%; margin: 0 auto; }
+.quiz-prog-txt { font-size: 12.5px; color: #6b7280; text-align: center; margin-bottom: 0.5rem; }
+.quiz-prog { background: #e5e7eb; border-radius: 6px; height: 6px; overflow: hidden; }
+.quiz-prog-fill { height: 100%; background: #378ADD; border-radius: 6px; transition: width .3s; }
+.quiz-mid { max-width: 720px; width: 100%; margin: 0 auto; flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 1rem; }
+.quiz-preg-row { display: flex; align-items: flex-start; gap: 10px; }
+.quiz-preg { font-size: clamp(20px, 3vw, 27px); font-weight: 600; color: #111; line-height: 1.4; flex: 1; }
+.quiz-oir { flex-shrink: 0; background: #E0EFFA; color: #0C447C; border: none; border-radius: 12px; width: 46px; height: 46px; font-size: 20px; cursor: pointer; }
+.quiz-oir:active { background: #cfe4f6; }
+.quiz-ops { display: flex; flex-direction: column; gap: 12px; }
+.quiz-op { width: 100%; text-align: left; padding: 18px 20px; border-radius: 16px; border: 1.5px solid #e5e7eb; background: #fff; font-size: clamp(16px, 2.2vw, 20px); color: #111; cursor: pointer; transition: border-color .12s, background .12s; }
+.quiz-op:hover { border-color: #378ADD; }
+.quiz-op:active { background: #f0f7fd; }
+.quiz-op.elegida { border-color: #378ADD; background: #E0EFFA; }
 </style>
 </head>
 <body>
@@ -81,6 +100,21 @@ body { font-family: system-ui, sans-serif; background: #f5f5f0; color: #111; }
     <div class="hint" id="msg">Lee el texto en voz alta cuando estés listo</div>
     <div class="prog-wrap" id="prog-wrap"><div class="prog-fill" id="prog"></div></div>
     <button class="btn idle" id="btn" onclick="toggleLectura()">🎤 Pulsa para leer</button>
+  </div>
+
+  <!-- Preguntas de comprensión tras la lectura (si el texto tiene banco) -->
+  <div class="quiz" id="quiz">
+    <div class="quiz-top">
+      <div class="quiz-prog-txt" id="quiz-prog-txt">Pregunta 1</div>
+      <div class="quiz-prog"><div class="quiz-prog-fill" id="quiz-prog-fill"></div></div>
+    </div>
+    <div class="quiz-mid">
+      <div class="quiz-preg-row">
+        <div class="quiz-preg" id="quiz-preg">—</div>
+        <button class="quiz-oir" id="quiz-oir" onclick="oirPregunta()" title="Escuchar la pregunta">🔊</button>
+      </div>
+      <div class="quiz-ops" id="quiz-ops"></div>
+    </div>
   </div>
 
   <!-- Fin de sesión: mensaje amable para el alumno, sin datos numéricos.
@@ -409,7 +443,36 @@ function mostrarResultados() {
 
   // Reset de las marcas del texto: al alumno NO se le pintan los fallos.
   palabras.forEach((_, i) => { const s = document.getElementById("w"+i); if (s) s.className = "word"; });
+  document.getElementById("msg").textContent = "Lee el texto en voz alta cuando estés listo";
+  resetBtn();
 
+  // Diagnóstico descargable (crudo del reconocedor + alineamiento) para el docente.
+  window.__lectoria_diag = {
+    version: MotorLectura.VERSION,
+    fecha: new Date().toISOString(),
+    texto_id: lecturaActual.id,
+    segundos_pared: segundos,
+    segundos_habla: m.segLectura,
+    spokenRaw: res.diag.spokenRaw,
+    alineamiento: res.diag.alineamiento,
+    metricas: m
+  };
+
+  // Comprensión: si el texto tiene banco de preguntas, el alumno las responde
+  // ANTES de cerrar; el resultado (aciertos/total) se guarda con la sesión y en
+  // verificar.html deriva el nivel de comprensión. Si no hay banco, se cierra
+  // directamente y la comprensión queda como campo manual del docente.
+  const preguntas = (typeof PREGUNTAS !== "undefined" && PREGUNTAS[lecturaActual.id]) || [];
+  if (preguntas.length > 0) {
+    iniciarQuiz(preguntas, () => finalizarSesion(m, res.detallePalabras, entradaMotor));
+  } else {
+    comprensionAciertos = null; comprensionTotal = null; comprensionDetalle = null;
+    finalizarSesion(m, res.detallePalabras, entradaMotor);
+  }
+}
+
+// ─── Cierre de sesión: mensaje de ánimo + guardado ───────────────────────────
+function finalizarSesion(m, detallePalabras, entradaMotor) {
   // Mensaje de ánimo (sin números ni marcas de error). El detalle —PPM,
   // errores, niveles— lo revisa el docente en verificar.html y en el panel.
   const totalErr     = m.omisiones + m.sustituciones + m.inversiones;
@@ -428,22 +491,92 @@ function mostrarResultados() {
   document.getElementById("overlay-sub").textContent  = "Guardando la lectura…";
   document.getElementById("verificar-btn").disabled   = true;
   document.getElementById("overlay").classList.add("show");
-  document.getElementById("msg").textContent = "Lee el texto en voz alta cuando estés listo";
-  resetBtn();
 
-  guardarSesion(m, res.detallePalabras, entradaMotor);
-
-  // Diagnóstico descargable (crudo del reconocedor + alineamiento) para el docente.
-  window.__lectoria_diag = {
-    version: MotorLectura.VERSION,
-    fecha: new Date().toISOString(),
-    texto_id: lecturaActual.id,
-    segundos_pared: segundos,
-    segundos_habla: m.segLectura,
-    spokenRaw: res.diag.spokenRaw,
-    alineamiento: res.diag.alineamiento,
-    metricas: m
+  if (comprensionDetalle) window.__lectoria_diag.comprension = {
+    aciertos: comprensionAciertos, total: comprensionTotal, respuestas: comprensionDetalle
   };
+
+  guardarSesion(m, detallePalabras, entradaMotor);
+}
+
+// ─── Preguntas de comprensión ────────────────────────────────────────────────
+// Sin marcar acierto/fallo en pantalla: es una evaluación, no un juego. Las
+// opciones se barajan para que la correcta no caiga siempre en el mismo sitio.
+let comprensionAciertos = null;   // nº de respuestas correctas (null = texto sin banco)
+let comprensionTotal    = null;   // nº de preguntas presentadas
+let comprensionDetalle  = null;   // [{p, elegida, correcta, acierto}] para el .raw.json
+let _quizPreguntas = [], _quizIdx = 0, _quizOrden = [], _quizDone = null;
+
+function iniciarQuiz(preguntas, onDone) {
+  comprensionAciertos = 0;
+  comprensionTotal    = preguntas.length;
+  comprensionDetalle  = [];
+  _quizPreguntas = preguntas;
+  _quizIdx = 0;
+  _quizDone = onDone;
+  document.getElementById("quiz").classList.add("show");
+  pintarPregunta();
+}
+
+function pintarPregunta() {
+  const q = _quizPreguntas[_quizIdx];
+  document.getElementById("quiz-prog-txt").textContent = "Pregunta " + (_quizIdx + 1) + " de " + _quizPreguntas.length;
+  document.getElementById("quiz-prog-fill").style.width = (_quizIdx / _quizPreguntas.length * 100) + "%";
+  document.getElementById("quiz-preg").textContent = q.p;
+
+  // Barajar el orden de las opciones (Fisher-Yates sobre los índices)
+  const idxs = q.op.map((_, i) => i);
+  for (let i = idxs.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [idxs[i], idxs[j]] = [idxs[j], idxs[i]];
+  }
+  _quizOrden = idxs;
+
+  const cont = document.getElementById("quiz-ops");
+  cont.innerHTML = "";
+  idxs.forEach(oi => {
+    const b = document.createElement("button");
+    b.className = "quiz-op";
+    b.textContent = q.op[oi];
+    b.onclick = () => responder(oi, b);
+    cont.appendChild(b);
+  });
+}
+
+function responder(opElegida, boton) {
+  // Evitar doble toque mientras pasa a la siguiente
+  document.querySelectorAll(".quiz-op").forEach(b => b.onclick = null);
+  if (boton) boton.classList.add("elegida");
+
+  const q = _quizPreguntas[_quizIdx];
+  const acierto = opElegida === q.r;
+  if (acierto) comprensionAciertos++;
+  comprensionDetalle.push({ p: q.p, elegida: q.op[opElegida], correcta: q.op[q.r], acierto });
+
+  try { if (window.speechSynthesis) window.speechSynthesis.cancel(); } catch (e) {}
+
+  _quizIdx++;
+  setTimeout(() => {
+    if (_quizIdx < _quizPreguntas.length) {
+      pintarPregunta();
+    } else {
+      document.getElementById("quiz-prog-fill").style.width = "100%";
+      document.getElementById("quiz").classList.remove("show");
+      if (_quizDone) _quizDone();
+    }
+  }, 180);
+}
+
+// Leer en voz alta la pregunta y sus opciones (síntesis del navegador, gratis y
+// local): para que la comprensión no dependa de saber decodificar bien.
+function oirPregunta() {
+  if (!("speechSynthesis" in window)) return;
+  const q = _quizPreguntas[_quizIdx];
+  window.speechSynthesis.cancel();
+  const partes = [q.p].concat(_quizOrden.map((oi, n) => "Opción " + (n + 1) + ": " + q.op[oi]));
+  const u = new SpeechSynthesisUtterance(partes.join(". "));
+  u.lang = "es-ES"; u.rate = 0.95;
+  window.speechSynthesis.speak(u);
 }
 
 // ─── Guardar sesión (audio + métricas + detalle palabra a palabra) ───────────
@@ -478,7 +611,8 @@ async function guardarSesion(m, detallePalabras, entradaMotor) {
         texto_id:     lecturaActual.id,
         texto_titulo: lecturaActual.titulo,
         curso:        cursoAlumno,
-        entrada:      entradaMotor
+        entrada:      entradaMotor,
+        comprension:  comprensionDetalle ? { aciertos: comprensionAciertos, total: comprensionTotal, respuestas: comprensionDetalle } : null
       })], { type: "application/json" });
       const { error: eRaw } = await sb.storage.from("audios")
         .upload(usuarioActual.id + "/" + sesionId + ".raw.json", raw, { contentType: "application/json" });
@@ -508,6 +642,8 @@ async function guardarSesion(m, detallePalabras, entradaMotor) {
       pausas_largas:     m.pausasLargas,
       duracion_segundos: segundos,
       audio_path:        audioPath,
+      comprension_aciertos: comprensionAciertos,
+      comprension_total:    comprensionTotal,
       fecha:             new Date().toISOString()
     });
     if (error) { console.error("Supabase error:", error); errorGuardado(); return; }

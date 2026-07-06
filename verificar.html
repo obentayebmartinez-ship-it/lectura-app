@@ -98,6 +98,15 @@
   .nivel-lbl.activo.niv-med  { border-color: #EF9F27; background: #FAEEDA; color: #633806; font-weight: 600; }
   .nivel-lbl.activo.niv-bien { border-color: #1D9E75; background: #E1F5EE; color: #0F6E56; font-weight: 600; }
   .loading { text-align: center; color: #9ca3af; font-size: 13px; padding: 2rem; }
+  /* Detalle del test de comprensión */
+  .comp-item { display: flex; gap: 10px; padding: 9px 0; border-bottom: 0.5px solid #f3f4f6; align-items: flex-start; }
+  .comp-item:last-child { border-bottom: none; }
+  .comp-icon { width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #fff; margin-top: 1px; }
+  .comp-item.ok .comp-icon { background: #1D9E75; }
+  .comp-item.ko .comp-icon { background: #E24B4A; }
+  .comp-p { font-size: 13px; color: #111; font-weight: 500; }
+  .comp-resp { font-size: 12px; color: #6b7280; margin-top: 2px; }
+  .comp-corr { font-size: 12px; color: #0F6E56; margin-top: 1px; }
 </style>
 </head>
 <body>
@@ -168,7 +177,7 @@ const DIMENSIONES = [
     { key: "rotacion",    label: "Rotación (b/d, p/q)", manual: true, sub: "error visual: solo observación directa" }
   ]},
   { grupo: "Comprensión y expresión", items: [
-    { key: "comprension", label: "Comprensión lectora", manual: true, positivo: true, sub: "preguntas orales tras la lectura" }
+    { key: "comprension", label: "Comprensión lectora", manual: true, positivo: true, sub: "test de preguntas tras la lectura · puedes ajustarlo" }
   ]}
 ];
 
@@ -187,7 +196,7 @@ const COMO_SE_MIDE = {
   pausas_entonacion: "Entonación y ritmo al leer. El reconocedor actual no la mide solo: valórala tú escuchando el audio.",
   silabeo: "Si lee sílaba a sílaba en vez de palabras enteras. Se valora por observación directa durante la lectura.",
   rotacion: "Confusión de letras espejo (b/d, p/q). Es un error visual: se valora por observación directa.",
-  comprension: "Cuánto entiende de lo leído. Se valora con 3–5 preguntas orales al terminar.",
+  comprension: "Cuánto entiende de lo leído. Se mide con las preguntas tipo test que responde el alumno al terminar: «En nivel» ≥80% de aciertos · «Reforzar» 50–79% · «Requiere trabajo» menos del 50%. Si la lectura no tenía preguntas, valóralo tú.",
   vacilacion: CRIT_ERROR, rectificacion: CRIT_ERROR, repeticion: CRIT_ERROR,
   sustitucion: CRIT_ERROR, omisiones: CRIT_ERROR, inversion: CRIT_ERROR, adicion: CRIT_ERROR
 };
@@ -224,6 +233,19 @@ async function init() {
   if (sesion.audio_path) {
     const { data: urlData } = await sb.storage.from("audios").createSignedUrl(sesion.audio_path, 3600);
     if (urlData?.signedUrl) sesion._audioUrl = urlData.signedUrl;
+
+    // Detalle pregunta a pregunta del test de comprensión (vive en el .raw.json,
+    // junto al audio). Es opcional: si falla o la sesión no tenía test, se omite.
+    if (sesion.comprension_total > 0) {
+      const rawPath = sesion.audio_path.replace(/\.webm$/, ".raw.json");
+      const { data: rurl } = await sb.storage.from("audios").createSignedUrl(rawPath, 3600);
+      if (rurl?.signedUrl) {
+        try {
+          const j = await fetch(rurl.signedUrl).then(r => r.json());
+          sesion._comprension = j?.comprension || null;
+        } catch (e) { console.warn("No se pudo cargar el detalle de comprensión:", e); }
+      }
+    }
   }
 
   render();
@@ -257,6 +279,10 @@ function calcularMedidas() {
     inversion:     m(cuenta("inversion")),
     adicion:       m(cuenta("adicion"))
   };
+  if (sesion.comprension_total > 0) {
+    const pct = Math.round(sesion.comprension_aciertos / sesion.comprension_total * 100);
+    medidas.comprension = `${sesion.comprension_aciertos} de ${sesion.comprension_total} preguntas acertadas · ${pct}%`;
+  }
 }
 
 function calcularNivelesAuto() {
@@ -276,8 +302,44 @@ function calcularNivelesAuto() {
     inversion:         nivelPorTasa(cuenta("inversion"), totalRef),
     adicion:           nivelPorTasa(cuenta("adicion"), totalRef)
   };
+  // Comprensión: se deriva del test respondido por el alumno (si lo hubo).
+  // ≥80% aciertos → En nivel · 50-79% → Reforzar · <50% → Requiere trabajo.
+  if (sesion.comprension_total > 0) {
+    const pctC = sesion.comprension_aciertos / sesion.comprension_total * 100;
+    auto.comprension = pctC >= 80 ? 3 : pctC >= 50 ? 2 : 1;
+  }
   // No pisar lo que el docente ya tocó ni lo guardado previamente
   Object.entries(auto).forEach(([k, v]) => { if (!nivelesTocados.has(k)) niveles[k] = v; });
+}
+
+// ─── Tarjeta con el detalle del test de comprensión ──────────────────────────
+function escaparHtml(s) {
+  return String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+function renderComprensionCard() {
+  const total = sesion.comprension_total;
+  if (!(total > 0)) return "";
+  const aciertos = sesion.comprension_aciertos;
+  const c = sesion._comprension;
+  let filas;
+  if (c && Array.isArray(c.respuestas) && c.respuestas.length) {
+    filas = c.respuestas.map((r, i) => `
+      <div class="comp-item ${r.acierto ? "ok" : "ko"}">
+        <div class="comp-icon">${r.acierto ? "✓" : "✗"}</div>
+        <div class="comp-txt">
+          <div class="comp-p">${i + 1}. ${escaparHtml(r.p)}</div>
+          <div class="comp-resp">Respondió: <b>${escaparHtml(r.elegida)}</b></div>
+          ${r.acierto ? "" : `<div class="comp-corr">Correcta: ${escaparHtml(r.correcta)}</div>`}
+        </div>
+      </div>`).join("");
+  } else {
+    filas = `<div class="nota">Sin el desglose de preguntas para esta sesión.</div>`;
+  }
+  return `
+    <div class="card">
+      <div class="card-title">🧠 Comprensión lectora — ${aciertos} de ${total} correctas</div>
+      ${filas}
+    </div>`;
 }
 
 // ─── Render ──────────────────────────────────────────────────────────────────
@@ -322,13 +384,14 @@ function render() {
           </div>
           <div class="ley-exp" id="ley-exp"></div>
         </div>
+        ${renderComprensionCard()}
       </div>
       <div>
         <div class="card">
           <div class="card-title">📋 Hoja de registro</div>
           <div class="nota" style="margin:0 0 12px">Cada fila se valora en tres niveles: <b style="color:#791F1F">Requiere trabajo</b> · <b style="color:#633806">Reforzar</b> · <b style="color:#0F6E56">En nivel</b>.
           La IA propone uno según los datos de la lectura (lo ves bajo cada fila) y <b>tú lo confirmas o lo cambias con un clic</b>.
-          Pulsa la <b>ⓘ</b> de cada fila para ver cómo se decide. Silabeo, rotación y comprensión las valoras tú por observación directa.</div>
+          Pulsa la <b>ⓘ</b> de cada fila para ver cómo se decide. Silabeo y rotación las valoras tú por observación directa; la comprensión se calcula con las preguntas de la lectura (cuando las hay).</div>
           <div id="hoja"></div>
           <button class="btn-guardar" id="btn-guardar" onclick="guardarVerificacion()">💾 Guardar verificación</button>
           <div class="guardado-ok" id="guardado-ok">✓ Verificación guardada — esta sesión pasa al dataset</div>

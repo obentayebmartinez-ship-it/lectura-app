@@ -48,10 +48,18 @@ create table if not exists sesiones (
   pausas_largas     int default 0,
   duracion_segundos int,
   audio_path        text,
+  comprension_aciertos int,      -- respuestas de comprensión acertadas (null = texto sin preguntas)
+  comprension_total    int,      -- nº de preguntas de comprensión presentadas
   estado            text not null default 'analizada' check (estado in ('analizada','verificada')),
   niveles           jsonb,
   fecha             timestamptz not null default now()
 );
+
+-- Comprensión lectora (columnas añadidas en julio 2026): idempotente para BD ya
+-- creadas con el esquema anterior. El detalle pregunta a pregunta va en el
+-- .raw.json de Storage; aquí solo el marcador que deriva el nivel en verificar.
+alter table sesiones add column if not exists comprension_aciertos int;
+alter table sesiones add column if not exists comprension_total    int;
 
 -- Detalle palabra a palabra: lo que propuso la IA (tipo_ia) y lo que confirmó
 -- o corrigió el docente (tipo_verificado). Las filas se guardan en el orden
