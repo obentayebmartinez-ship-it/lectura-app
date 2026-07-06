@@ -312,7 +312,7 @@
 
       // Explicación de cómo se leen los niveles (evita que el color, ahora
       // neutro, se malinterprete: un "3" no siempre es bueno ni malo)
-      const explic = "Cómo se leen los niveles: cada dimensión se valora como «Requiere trabajo», «Reforzar» o «En nivel» (de menos a más logrado). La velocidad se calcula sobre el objetivo del curso, la entonación con el análisis de voz y los errores por su frecuencia cada 100 palabras. Silabeo, rotación y comprensión los valora el profesional por observación directa.";
+      const explic = "Cómo se leen los niveles: cada dimensión se valora como «Requiere trabajo», «Reforzar» o «En nivel» (de menos a más logrado). La velocidad se calcula sobre el objetivo del curso, la entonación con el análisis de voz, los errores por su frecuencia cada 100 palabras y la comprensión con el test de preguntas de la lectura. Silabeo y rotación los valora el profesional por observación directa.";
       const linExp = doc.splitTextToSize(explic, 182);
       if (y + linExp.length * 3.3 > 286) { doc.addPage(); y = 18; }
       doc.setFontSize(7.5); doc.setFont("helvetica", "normal"); doc.setTextColor.apply(doc, GRIS);
@@ -380,6 +380,13 @@
       : ultima.ppm >= objetivo * 0.8
       ? `Está cerca del objetivo de su curso (${objetivo} PPM). Se recomienda práctica diaria de unos 10 minutos con textos de su nivel.`
       : "Necesita apoyo adicional para alcanzar el objetivo de su curso. Se recomiendan sesiones de lectura guiada con el profesional de referencia.");
+    // Comprensión lectora: media de aciertos del test (sesiones que lo tuvieron)
+    const conComp = ses.filter(s => s.comprension_total > 0);
+    if (conComp.length) {
+      const compPct = Math.round(media(conComp.map(s => s.comprension_aciertos / s.comprension_total * 100)));
+      const ultC = conComp[conComp.length - 1];
+      obs.push(`En comprensión lectora acierta de media el ${compPct}% de las preguntas del test tras la lectura (última: ${ultC.comprension_aciertos} de ${ultC.comprension_total}).`);
+    }
     y = cajaTexto(doc, y, "Observaciones", obs, [240, 253, 244], [15, 110, 86]);
 
     // ── Propuesta de trabajo: recomendaciones según lo que más le cuesta ──

@@ -141,7 +141,7 @@
   <div class="card-title">📋 Hoja de registro <small id="registro-fecha"></small></div>
   <div class="nota" style="margin-top:0;margin-bottom:1rem;">
     Cómo se leen los niveles: cada dimensión se valora como <b>Requiere trabajo</b>, <b>Reforzar</b> o <b>En nivel</b> (de menos a más logrado).
-    Velocidad = PPM sobre el objetivo del curso · entonación = prosodia del análisis de voz · errores = frecuencia cada 100 palabras. Silabeo, rotación y comprensión los valora el profesional por observación directa.
+    Velocidad = PPM sobre el objetivo del curso · entonación = prosodia del análisis de voz · errores = frecuencia cada 100 palabras · comprensión = aciertos del test de preguntas de la lectura. Silabeo y rotación los valora el profesional por observación directa.
   </div>
   <div class="grid-2" style="margin-bottom:0">
     <div id="registro-col-1"></div>
@@ -262,11 +262,17 @@ function render(sesiones) {
   const estado = ppmActual >= objetivo ? "En nivel" : ppmActual >= objetivo * 0.8 ? "Cerca" : "Necesita apoyo";
   const verificadas = sesionesValidas.filter(s => s.estado === "verificada");
 
+  // Comprensión: media de aciertos del test (sesiones que lo tuvieron)
+  const conComp = sesionesValidas.filter(s => s.comprension_total > 0);
+  const compMediaPct = conComp.length
+    ? Math.round(conComp.reduce((a, s) => a + s.comprension_aciertos / s.comprension_total, 0) / conComp.length * 100)
+    : null;
+
   document.getElementById("alumno-hero").innerHTML = `
     <div class="avatar">${iniciales}</div>
     <div>
       <div class="alumno-nombre">${alumnoNombre}</div>
-      <div class="alumno-meta">${alumnoCurso} · ${sesionesValidas.length} lectura(s) · mejor marca ${mejorMarca} PPM · última el ${fmtFecha(ultima.fecha)}</div>
+      <div class="alumno-meta">${alumnoCurso} · ${sesionesValidas.length} lectura(s) · mejor marca ${mejorMarca} PPM${compMediaPct != null ? ` · comprensión ${compMediaPct}%` : ""} · última el ${fmtFecha(ultima.fecha)}</div>
     </div>
     <span class="badge ${badge}">${estado}</span>`;
 
@@ -388,6 +394,7 @@ function render(sesiones) {
     const meta = [
       new Date(s.fecha).toLocaleDateString("es-ES", { day: "2-digit", month: "short" }),
       s.precision != null ? s.precision + "% precisión" : null,
+      s.comprension_total > 0 ? `comprensión ${s.comprension_aciertos}/${s.comprension_total}` : null,
       dur,
       s.prosody ? "entonación " + s.prosody : null,
       verificada ? "✓ verificada" : null
