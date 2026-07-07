@@ -24,7 +24,7 @@
 })(typeof self !== "undefined" ? self : this, function () {
 "use strict";
 
-const VERSION = "motor v3.3";
+const VERSION = "motor v3.4";
 
 // ─── Umbrales del clasificador (calibrables con calibrar.js) ─────────────────
 const UMBRALES_DEFECTO = {
@@ -154,6 +154,132 @@ function esInversion(target, spoken) {
 // Limpia signos de puntuación de una palabra
 function limpiar(p) { return (p||"").replace(/[.,;:!?¡¿]/g, ""); }
 
+// ─── Números y romanos: expansión a su forma HABLADA ─────────────────────────
+// El texto de referencia escribe "1492" o "XVIII" como UNA palabra, pero el niño
+// lee "mil cuatrocientos noventa y dos" / "dieciocho". Sin expandir, el
+// alineamiento cuenta falsos errores en cascada. Expandimos la referencia a
+// palabras para alinear, y luego colapsamos de vuelta (ver colapsarADisplay)
+// para que cada número siga siendo UNA marca en pantalla y en las métricas.
+function numeroAPalabras(n) {
+  n = Math.floor(Math.abs(n));
+  if (n === 0) return "cero";
+  const U = ["","uno","dos","tres","cuatro","cinco","seis","siete","ocho","nueve","diez",
+    "once","doce","trece","catorce","quince","dieciséis","diecisiete","dieciocho","diecinueve",
+    "veinte","veintiuno","veintidós","veintitrés","veinticuatro","veinticinco","veintiséis",
+    "veintisiete","veintiocho","veintinueve"];
+  const DEC = ["","","","treinta","cuarenta","cincuenta","sesenta","setenta","ochenta","noventa"];
+  const CEN = ["","ciento","doscientos","trescientos","cuatrocientos","quinientos","seiscientos",
+    "setecientos","ochocientos","novecientos"];
+  const men100 = x => x < 30 ? U[x] : (x % 10 ? DEC[Math.floor(x/10)] + " y " + U[x%10] : DEC[Math.floor(x/10)]);
+  const men1000 = x => {
+    if (x < 100) return men100(x);
+    if (x === 100) return "cien";
+    const c = Math.floor(x/100), r = x % 100;
+    return r ? CEN[c] + " " + men100(r) : CEN[c];
+  };
+  if (n < 1000) return men1000(n);
+  if (n < 1000000) {
+    const miles = Math.floor(n/1000), r = n % 1000;
+    const pref = miles === 1 ? "mil" : men1000(miles) + " mil";
+    return r ? pref + " " + men1000(r) : pref;
+  }
+  const mill = Math.floor(n/1000000), r = n % 1000000;
+  const pref = mill === 1 ? "un millón" : men1000(mill) + " millones";
+  return r ? pref + " " + numeroAPalabras(r) : pref;
+}
+
+const ROMANO_RE = /^(M{0,4})(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})$/;
+const ORDINAL_M = { 1:"primero",2:"segundo",3:"tercero",4:"cuarto",5:"quinto",6:"sexto",
+  7:"séptimo",8:"octavo",9:"noveno",10:"décimo",11:"undécimo",12:"duodécimo",
+  13:"decimotercero",14:"decimocuarto",15:"decimoquinto",16:"decimosexto",
+  17:"decimoséptimo",18:"decimoctavo",19:"decimonoveno",20:"vigésimo" };
+function esRomanoToken(s) {
+  if (!s || s !== s.toUpperCase()) return false;           // solo MAYÚSCULAS (los numerales lo son)
+  if (!/^[IVXLCDM]+$/.test(s) || !ROMANO_RE.test(s)) return false;
+  if (s.length === 1 && !"IVX".includes(s)) return false;  // evita L,C,D,M sueltas (iniciales, no números)
+  return true;
+}
+function romanoAEntero(s) {
+  const V = { I:1, V:5, X:10, L:50, C:100, D:500, M:1000 };
+  let tot = 0;
+  for (let i = 0; i < s.length; i++) tot += (V[s[i]] < (V[s[i+1]] || 0)) ? -V[s[i]] : V[s[i]];
+  return tot;
+}
+
+// Expande la referencia: devuelve tokens para alinear (refExp), y por cada uno
+// el índice de la palabra que se muestra en pantalla (refMap) y —solo para
+// romanos de un token— las formas fonéticas aceptables (refAlt: cardinal y
+// ordinal, porque "siglo V" se lee "cinco" pero "Carlos V" se lee "quinto").
+function expandirReferencia(palabrasDisplay) {
+  const refExp = [], refMap = [], refAlt = [];
+  palabrasDisplay.forEach((tok, di) => {
+    const core = (tok.match(/[0-9A-Za-z]+/) || [""])[0];
+    let words = null, alts = null;
+    if (core && /^\d+$/.test(core) && core === tok.replace(/[^0-9]/g, "")) {
+      words = numeroAPalabras(parseInt(core, 10)).split(" ");
+    } else if (core && esRomanoToken(core) && core === tok.replace(/[^A-Za-z]/g, "")) {
+      const v = romanoAEntero(core);
+      words = numeroAPalabras(v).split(" ");
+      if (words.length === 1) {
+        const s = new Set([fonetica(words[0])]);
+        const om = ORDINAL_M[v];
+        if (om) { s.add(fonetica(om)); s.add(fonetica(om.replace(/o$/, "a"))); }
+        alts = Array.from(s);
+      }
+    }
+    if (!words) { refExp.push(tok); refMap.push(di); refAlt.push(null); return; }
+    words.forEach(w => { refExp.push(w); refMap.push(di); refAlt.push(words.length === 1 ? alts : null); });
+  });
+  return { refExp, refMap, refAlt };
+}
+
+// Colapsa el alineamiento (a nivel de token expandido) a nivel de PALABRA de
+// pantalla: las palabras normales pasan 1-a-1 (con su forma fonética _fon y sus
+// alternativas _alt); los números/romanos de varios tokens se agrupan en un
+// solo item con veredicto ya decidido (_forzado: correcta|sustitucion|omision).
+function colapsarADisplay(alignment, refExp, refMap, refAlt, palabrasDisplay) {
+  const cuenta = {};
+  refMap.forEach(di => { cuenta[di] = (cuenta[di] || 0) + 1; });
+  const out = [];
+  let i = 0;
+  while (i < alignment.length) {
+    const it = alignment[i];
+    if (it.origIdx < 0) {   // inserción (palabra dicha de más)
+      out.push({ orig: null, origIdx: -1, spoken: it.spoken, spokenIdx: it.spokenIdx, _fon: null, _alt: null });
+      i++; continue;
+    }
+    const di = refMap[it.origIdx];
+    if (cuenta[di] === 1) {  // palabra normal o romano de un solo token → pasa 1-a-1
+      out.push({ orig: palabrasDisplay[di], origIdx: di, spoken: it.spoken, spokenIdx: it.spokenIdx,
+                 _fon: refExp[it.origIdx], _alt: refAlt[it.origIdx] });
+      i++; continue;
+    }
+    // Palabra expandida en varios tokens: agrupar (absorbiendo inserciones
+    // intercaladas, no las finales) y decidir un único veredicto.
+    let j = i, lastRef = -1; const grupo = [];
+    while (j < alignment.length) {
+      const a = alignment[j];
+      if (a.origIdx >= 0) { if (refMap[a.origIdx] !== di) break; lastRef = grupo.length; }
+      grupo.push(a); j++;
+    }
+    const usados = grupo.slice(0, lastRef + 1);
+    i += usados.length;
+    const refItems = usados.filter(g => g.origIdx >= 0);
+    const casan = refItems.filter(g => g.spoken !== null &&
+      (fonetica(refExp[g.origIdx]) === fonetica(g.spoken) ||
+       (refAlt[g.origIdx] && refAlt[g.origIdx].indexOf(fonetica(g.spoken)) >= 0))).length;
+    const omit = refItems.filter(g => g.spoken === null).length;
+    const dichos = usados.map(g => g.spoken).filter(Boolean);
+    const rep = usados.find(g => g.spokenIdx >= 0);
+    const forzado = omit === refItems.length ? "omision"
+      : (casan === refItems.length && usados.length === refItems.length) ? "correcta"
+      : "sustitucion";
+    out.push({ orig: palabrasDisplay[di], origIdx: di, spoken: dichos.join(" ") || null,
+               spokenIdx: rep ? rep.spokenIdx : -1, _fon: null, _alt: null, _forzado: forzado });
+  }
+  return out;
+}
+
 // ─── ANÁLISIS COMPLETO ───────────────────────────────────────────────────────
 // Devuelve { version, metricas, detallePalabras, ui, diag }.
 //   metricas        → lo que se guarda en la tabla sesiones
@@ -163,7 +289,12 @@ function limpiar(p) { return (p||"").replace(/[.,;:!?¡¿]/g, ""); }
 //   diag            → datos crudos para el JSON de diagnóstico
 function analizar(entrada, umbralesExtra) {
   const U = Object.assign({}, UMBRALES_DEFECTO, umbralesExtra || {});
-  const palabras = entrada.palabras || [];
+  const palabrasDisplay = entrada.palabras || [];
+  // Expandir números arábigos y romanos de la referencia a su forma hablada,
+  // para que el alineamiento no cuente falsos errores cuando el niño lee "1492"
+  // como "mil cuatrocientos noventa y dos". refMap indica, por cada token
+  // expandido, a qué palabra de pantalla pertenece (se colapsa tras alinear).
+  const { refExp, refMap, refAlt } = expandirReferencia(palabrasDisplay);
   const segundos = entrada.segundos || 0;
   // Copia profunda: el colapso de repeticiones modifica los objetos y el
   // análisis debe poder repetirse (calibración) sin corromper la entrada.
@@ -225,10 +356,13 @@ function analizar(entrada, umbralesExtra) {
   }
   const spokenTexts = spoken.map(w => w.Word);
 
-  // 2. Alineación global Needleman-Wunsch
-  const alignment = spokenTexts.length > 0
-    ? alinearNW(palabras, spokenTexts, U.nwGap)
-    : palabras.map((p,i) => ({orig:p, origIdx:i, spoken:null, spokenIdx:-1}));
+  // 2. Alineación global Needleman-Wunsch (sobre la referencia EXPANDIDA)…
+  const alignExp = spokenTexts.length > 0
+    ? alinearNW(refExp, spokenTexts, U.nwGap)
+    : refExp.map((p,i) => ({orig:p, origIdx:i, spoken:null, spokenIdx:-1}));
+  // …y colapso a nivel de palabra de pantalla: un número/romano vuelve a ser
+  // UNA marca (coherente en métricas, detalle y hoja de registro).
+  const alignment = colapsarADisplay(alignExp, refExp, refMap, refAlt, palabrasDisplay);
 
   // 2b. Si la lectura se interrumpió antes del final (botón pulsado antes de
   // terminar), la cola de palabras no leídas NO debe contar como omisiones.
@@ -281,6 +415,31 @@ function analizar(entrada, umbralesExtra) {
   };
 
   alignment.forEach((item, ai) => {
+    // ── Número/romano colapsado: veredicto ya decidido en colapsarADisplay ──
+    if (item._forzado) {
+      if (item._forzado === "correcta") {
+        correctas++;
+        marca(item, "done", null);
+        reg(item, "correcta");
+      } else if (item._forzado === "omision") {
+        if (ai > lastSpokenAi) {   // cola no leída: la sesión terminó antes
+          marca(item, "", "No leída · la lectura terminó antes de este número");
+          reg(item, "no_leida");
+        } else {
+          omisiones++;
+          marca(item, "omision", "Omisión · no leyó este número");
+          errDetalle.push({ word: limpiar(item.orig), tipo: "omision" });
+          reg(item, "omision");
+        }
+      } else {   // sustitucion: lo leyó, pero mal
+        sustituciones++;
+        marca(item, "sustitucion", "Lectura errónea del número · dijo «" + limpiar(item.spoken || "") + "»");
+        errDetalle.push({ word: limpiar(item.orig), tipo: "sustitucion", dicho: limpiar(item.spoken || "") });
+        reg(item, "sustitucion");
+      }
+      return;
+    }
+
     // ── Palabra dicha de más (inserción, NO repetición consecutiva) ──
     if (item.orig === null) {
       const wn  = normalizar(item.spoken);
@@ -292,11 +451,12 @@ function analizar(entrada, umbralesExtra) {
         return;
       }
       const sig  = alignment[ai+1];
-      const sigN = sig && sig.orig ? normalizar(sig.orig) : "";
+      const sigRef = sig ? (sig._fon || sig.orig) : null;
+      const sigN = sigRef ? normalizar(sigRef) : "";
       // Rectificación / falso comienzo: dijo algo parecido (o un trozo inicial,
       // "ma- mariposa") de la SIGUIENTE palabra y luego la leyó bien.
       const falsoComienzo = sigN && wn.length >= 2 && wn !== sigN && sigN.startsWith(wn);
-      const parecida      = sigN && wn !== sigN && similitud(fonetica(item.spoken), fonetica(sig.orig)) >= U.simFalsoComienzo;
+      const parecida      = sigRef && wn !== sigN && similitud(fonetica(item.spoken), fonetica(sigRef)) >= U.simFalsoComienzo;
       if (falsoComienzo || parecida) {
         rectificaciones++;
         reg(item, "rectificacion");
@@ -333,7 +493,10 @@ function analizar(entrada, umbralesExtra) {
     const w       = spoken[item.spokenIdx];
     const origN   = normalizar(item.orig);
     const spokenN = normalizar(item.spoken);
-    const exacta  = (origN === spokenN) || (fonetica(item.orig) === fonetica(item.spoken));
+    // _fon = forma fonética de referencia (para romanos, el cardinal; para el
+    // resto, la propia palabra). _alt = otras lecturas válidas (ordinal romano).
+    const exacta  = (origN === spokenN) || (fonetica(item._fon) === fonetica(item.spoken))
+                    || (item._alt && item._alt.indexOf(fonetica(item.spoken)) >= 0);
 
     if (exacta) {
       // LECTURA ERRÓNEA recuperada: el reconocedor "autocorrige" lo mal leído
@@ -343,7 +506,7 @@ function analizar(entrada, umbralesExtra) {
       const accW = w?.PronunciationAssessment?.AccuracyScore ?? 100;
       const etW  = w?.PronunciationAssessment?.ErrorType;
       if (etW === "Mispronunciation" && accW < U.accSustitucion &&
-          !PALABRAS_FUNCIONALES.has(origN) && fonetica(item.orig).length >= U.lenFonSustitucion) {
+          !PALABRAS_FUNCIONALES.has(origN) && fonetica(item._fon).length >= U.lenFonSustitucion) {
         sustituciones++;
         marca(item, "sustitucion", "Lectura errónea · la pronunció mal (precisión " + accW + "/100)");
         errDetalle.push({word: limpiar(item.orig), tipo: "sustitucion", dicho: "mal pronunciada"});
@@ -358,7 +521,7 @@ function analizar(entrada, umbralesExtra) {
       // puntuación (pausar en el punto/coma es prosodia CORRECTA, no duda),
       // y el umbral se adapta al ritmo del propio alumno.
       const gap            = gapAntes.get(item.spokenIdx) || 0;
-      const trasPuntuacion = item.origIdx > 0 && /[.,;:!?…»)]$/.test(palabras[item.origIdx - 1]);
+      const trasPuntuacion = item.origIdx > 0 && /[.,;:!?…»)]$/.test(palabrasDisplay[item.origIdx - 1]);
       const hayPausaAntes  = gap > (trasPuntuacion ? umbralPausaPunt : umbralPausa);
       if (hayPausaAntes) pausasLargas++;
 
@@ -381,7 +544,7 @@ function analizar(entrada, umbralesExtra) {
         marca(item, "done", null);
         reg(item, "correcta", gap);
       }
-    } else if (esInversion(item.orig, item.spoken)) {
+    } else if (esInversion(item._fon, item.spoken)) {
       inversiones++;
       marca(item, "inversion", "Inversión · dijo «" + limpiar(item.spoken) + "» (letras cambiadas)");
       errDetalle.push({word: limpiar(item.orig), tipo: "inversion", dicho: limpiar(item.spoken)});
@@ -429,5 +592,6 @@ function analizar(entrada, umbralesExtra) {
 }
 
 return { VERSION, UMBRALES_DEFECTO, analizar, normalizar, fonetica, levenshtein,
-         similitud, alinearNW, esInversion, limpiar, MULETILLAS, PALABRAS_FUNCIONALES };
+         similitud, alinearNW, esInversion, limpiar, MULETILLAS, PALABRAS_FUNCIONALES,
+         numeroAPalabras, expandirReferencia, esRomanoToken, romanoAEntero };
 });
