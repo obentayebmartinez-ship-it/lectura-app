@@ -154,6 +154,27 @@ function esInversion(target, spoken) {
 // Limpia signos de puntuación de una palabra
 function limpiar(p) { return (p||"").replace(/[.,;:!?¡¿]/g, ""); }
 
+// ─── Repeticiones LEGÍTIMAS del texto (no del alumno) ────────────────────────
+// Algunos textos repiten una frase a caballo de un punto ("...la gravedad. La
+// gravedad es la fuerza..."). Un lector correcto la dice dos veces, pero NO es
+// una repetición del alumno. Devuelve el conjunto de claves fonéticas (n-gramas
+// 1..3) que la REFERENCIA repite consecutivamente con la primera aparición
+// terminada en signo de fin de frase, para no colapsarlas como repetición.
+function repeticionesLegitimas(pal) {
+  const set = new Set();
+  const fon = pal.map(fonetica);
+  const FIN_FRASE = /[.!?…;:]$/;
+  for (let n = 1; n <= 3; n++) {
+    for (let k = 2 * n; k <= pal.length; k++) {
+      const a = fon.slice(k - n, k), b = fon.slice(k - 2 * n, k - n);
+      if (a.some(x => x === "") || !a.every((x, i) => x === b[i])) continue;
+      // La primera aparición (b) termina, en su último token, en puntuación de fin
+      if (FIN_FRASE.test(pal[k - n - 1] || "")) set.add(a.join("|"));
+    }
+  }
+  return set;
+}
+
 // ─── Números y romanos: expansión a su forma HABLADA ─────────────────────────
 // El texto de referencia escribe "1492" o "XVIII" como UNA palabra, pero el niño
 // lee "mil cuatrocientos noventa y dos" / "dieciocho". Sin expandir, el
@@ -310,6 +331,8 @@ function analizar(entrada, umbralesExtra) {
   // alumno nunca puede solaparse consigo misma. Los artefactos se descartan
   // en silencio; solo las repeticiones reales marcan _repetida.
   const FIN = w => (w.Offset||0) + (w.Duration||0);
+  // Frases que el propio texto repite tras un punto: no se colapsan (ver helper).
+  const repesLegitimos = repeticionesLegitimas(palabrasDisplay);
   const spoken = [];
   for (const cur of spokenRaw) {
     spoken.push(cur);
@@ -323,6 +346,9 @@ function analizar(entrada, umbralesExtra) {
       if (!igual) continue;
       // ¿La "copia" empieza antes de que termine el original? → artefacto
       const solape = (a[0].Offset||0) < FIN(b[b.length - 1]) - U.solapeTicks;
+      // Repetición LEGÍTIMA del texto (no del alumno) y NO artefacto solapado:
+      // dejarla intacta para que el alineamiento case las dos apariciones.
+      if (!solape && repesLegitimos.has(a.map(w => fonetica(w.Word)).join("|"))) continue;
       const lastB = b[b.length - 1], lastA = a[a.length - 1];
       if (!solape) {
         if (n === 1) {
