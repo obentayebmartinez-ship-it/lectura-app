@@ -563,12 +563,17 @@ async function guardarVerificacion() {
   btn.disabled = true; btn.textContent = "Guardando...";
 
   let fallos = 0;
-  for (const p of palabras.filter(x => x._dirty)) {
-    const { error } = await sb.from("sesion_palabras")
-      .update({ tipo_verificado: p.tipo_verificado }).eq("id", p.id);
+  // Las correcciones se envían en paralelo (antes era una a una en serie:
+  // con 20 correcciones tardaba 20 viajes encadenados).
+  const dirty = palabras.filter(x => x._dirty);
+  const resultados = await Promise.all(dirty.map(p =>
+    sb.from("sesion_palabras").update({ tipo_verificado: p.tipo_verificado }).eq("id", p.id)
+      .then(r => ({ p, error: r.error }))
+  ));
+  resultados.forEach(({ p, error }) => {
     if (error) { console.error("Error guardando palabra:", error); fallos++; }
     else p._dirty = false;
-  }
+  });
 
   const { error: eSes } = await sb.from("sesiones")
     .update({ niveles: niveles, estado: "verificada" }).eq("id", sesionId);
@@ -583,6 +588,11 @@ async function guardarVerificacion() {
     alert("Hubo " + fallos + " error(es) al guardar. Revisa la conexión e inténtalo de nuevo.");
   }
 }
+
+// Avisar si se abandona la página con correcciones sin guardar
+window.addEventListener("beforeunload", ev => {
+  if (hayCambios) { ev.preventDefault(); ev.returnValue = ""; }
+});
 
 init();
 </script>

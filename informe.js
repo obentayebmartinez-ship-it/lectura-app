@@ -307,7 +307,7 @@
       doc.setFontSize(11); doc.setFont("helvetica", "bold"); doc.setTextColor.apply(doc, TINTA);
       doc.text("Hoja de registro (verificada por el profesional)", 14, y);
       doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor.apply(doc, GRIS_CLARO);
-      doc.text(`sesión del ${fmtFecha(ultimaVerif.fecha)} · 1 bajo · 2 medio · 3 alto`, 196, y, { align: "right" });
+      doc.text(`sesión del ${fmtFecha(ultimaVerif.fecha)} · Requiere trabajo / Reforzar / En nivel`, 196, y, { align: "right" });
       y = dibujarNiveles(doc, y + 7, ultimaVerif.niveles) + 4;
 
       // Explicación de cómo se leen los niveles (evita que el color, ahora

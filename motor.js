@@ -63,7 +63,10 @@ function normalizar(str) {
 
 // Normalización FONÉTICA del español: convierte una palabra a su forma
 // "sonora" para no penalizar homófonos (tuvo=tubo, echo=hecho, halla=haya,
-// cielo=sielo, gente=jente...). "los" y "las" siguen siendo distintas.
+// gente=jente...). OJO: se mantiene la DISTINCIÓN castellana c-z ≠ s
+// (cielo→"zielo" ≠ "sielo") a propósito; en la práctica no penaliza el seseo
+// porque Whisper devuelve la ortografía normalizada, no la pronunciación.
+// "los" y "las" siguen siendo distintas.
 function fonetica(str) {
   let s = (str || "").toLowerCase()
     .replace(/[.,;:!?¡¿\-«»()"']/g, "")
@@ -122,11 +125,15 @@ function alinearNW(origWords, spokenWords, gapPen) {
   const GAP = (gapPen != null) ? gapPen : UMBRALES_DEFECTO.nwGap;
   const dp = Array.from({length:m+1}, () => new Float32Array(n+1));
   const tb = Array.from({length:m+1}, () => new Int8Array(n+1));
+  // Precomputar las formas fonéticas: dentro del doble bucle se consultan
+  // m×n veces y fonetica() es una cadena de regex (se notaba en textos largos).
+  const fonOrig   = origWords.map(fonetica);
+  const fonSpoken = spokenWords.map(fonetica);
   for (let i=1;i<=m;i++){dp[i][0]=i*GAP;tb[i][0]=1;}
   for (let j=1;j<=n;j++){dp[0][j]=j*GAP;tb[0][j]=2;}
   for (let i=1;i<=m;i++){
     for (let j=1;j<=n;j++){
-      const sim = similitud(fonetica(origWords[i-1]), fonetica(spokenWords[j-1]));
+      const sim = similitud(fonOrig[i-1], fonSpoken[j-1]);
       const ms  = sim*2-1;
       const d=dp[i-1][j-1]+ms, u=dp[i-1][j]+GAP, l=dp[i][j-1]+GAP;
       if (d>=u&&d>=l){dp[i][j]=d;tb[i][j]=0;}
