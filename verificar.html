@@ -365,8 +365,8 @@ function render() {
           <div class="sesion-head">
             <div class="avatar">${ini}</div>
             <div style="flex:1">
-              <div class="sesion-nombre">${sesion.alumno_nombre}</div>
-              <div class="sesion-meta">${sesion.curso} · «${sesion.texto_titulo || sesion.texto_id}» · ${fecha}</div>
+              <div class="sesion-nombre">${escaparHtml(sesion.alumno_nombre)}</div>
+              <div class="sesion-meta">${escaparHtml(sesion.curso)} · «${escaparHtml(sesion.texto_titulo || sesion.texto_id)}» · ${fecha}</div>
             </div>
             <span class="chip">${sesion.ppm || "—"} PPM</span>
             <span class="chip">${sesion.precision != null ? sesion.precision + "%" : "—"} precisión</span>

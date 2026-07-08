@@ -160,6 +160,8 @@ const DIA = 24 * 3600 * 1000;
 const fmtFecha = f => new Date(f).toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit" });
 const media = a => a.length ? a.reduce((s, v) => s + v, 0) / a.length : 0;
 const objetivoDe = curso => OBJETIVOS_PPM[curso] || 90;
+// Escapar texto que va dentro de innerHTML (nombres de alumno, etc.)
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 function estadoDe(ppm, objetivo) {
   if (ppm >= objetivo)       return { clave: "ok",   texto: "En nivel",      color: "#1D9E75" };
@@ -203,6 +205,13 @@ async function toggleConsentimiento(id, actual) {
   const { error } = await sb.from("alumnos").update({ consentimiento_audio: nuevo }).eq("id", id);
   if (error) { alert("No se pudo actualizar el consentimiento"); return; }
   await cargarTodo();
+}
+
+// Variante segura para los onclick generados: busca la ficha por id (así el
+// nombre nunca viaja incrustado en un atributo HTML).
+function irALecturaId(id) {
+  const a = alumnos.find(x => x.id === id);
+  if (a) irALectura(a.id, a.nombre, a.curso, a.consentimiento_audio);
 }
 
 function irALectura(id, nombre, curso, consentimiento) {
@@ -300,7 +309,7 @@ function renderListaAlumnos() {
     return `
       <div class="alumno-fila">
         <div>
-          <div class="alumno-nombre">${a.nombre} <span style="font-size:11px;color:#9ca3af;font-weight:400">${a.curso}</span></div>
+          <div class="alumno-nombre">${esc(a.nombre)} <span style="font-size:11px;color:#9ca3af;font-weight:400">${a.curso}</span></div>
           ${stats}
         </div>
         <div class="alumno-derecha">
@@ -308,7 +317,7 @@ function renderListaAlumnos() {
                   title="${a.consentimiento_audio ? "Consentimiento de audio: SÍ — se guarda la grabación de sus lecturas. Pulsa para retirarlo." : "Consentimiento de audio: NO — sus lecturas se analizan sin guardar el audio. Pulsa si ya tienes el consentimiento firmado."}"
                   onclick="toggleConsentimiento('${a.id}', ${a.consentimiento_audio ? "true" : "false"})">🎙️</button>
           ${tiene ? `<button class="btn-pdf" onclick="window.location.href='alumno.html?id=${a.id}'">📊 Ver</button>` : ""}
-          <button class="btn-leer" onclick="irALectura('${a.id}', '${a.nombre.replace(/'/g, "\\'")}', '${a.curso}', ${a.consentimiento_audio ? "true" : "false"})">▶ Leer</button>
+          <button class="btn-leer" onclick="irALecturaId('${a.id}')">▶ Leer</button>
         </div>
       </div>`;
   }).join("");
@@ -325,13 +334,13 @@ function renderAlertas() {
     const sinVerif = g.sesiones.some(s => s.estado !== "verificada");
 
     if (g.estado.clave === "bad")
-      alertas.push({ pri: 0, icono: "🔴", g, txt: `<b>${g.nombre}</b> está por debajo del nivel (${g.ultima.ppm} de ${g.objetivo} PPM).`, sesion: g.ultima });
+      alertas.push({ pri: 0, icono: "🔴", g, txt: `<b>${esc(g.nombre)}</b> está por debajo del nivel (${g.ultima.ppm} de ${g.objetivo} PPM).`, sesion: g.ultima });
     else if (baja && g.estado.clave === "warn")
-      alertas.push({ pri: 1, icono: "📉", g, txt: `<b>${g.nombre}</b> ha bajado de ${ppms[ppms.length - 2]} a ${ppms[ppms.length - 1]} PPM.`, sesion: g.ultima });
+      alertas.push({ pri: 1, icono: "📉", g, txt: `<b>${esc(g.nombre)}</b> ha bajado de ${ppms[ppms.length - 2]} a ${ppms[ppms.length - 1]} PPM.`, sesion: g.ultima });
     else if (dias >= 14)
-      alertas.push({ pri: 2, icono: "🕑", g, txt: `<b>${g.nombre}</b> no lee desde hace ${dias} días.`, sesion: null });
+      alertas.push({ pri: 2, icono: "🕑", g, txt: `<b>${esc(g.nombre)}</b> no lee desde hace ${dias} días.`, sesion: null });
     else if (sinVerif && g.sesiones.length)
-      alertas.push({ pri: 3, icono: "✔️", g, txt: `<b>${g.nombre}</b> tiene lecturas sin verificar.`, sesion: g.sesiones.filter(s => s.estado !== "verificada").slice(-1)[0] });
+      alertas.push({ pri: 3, icono: "✔️", g, txt: `<b>${esc(g.nombre)}</b> tiene lecturas sin verificar.`, sesion: g.sesiones.filter(s => s.estado !== "verificada").slice(-1)[0] });
   });
   alertas.sort((a, b) => a.pri - b.pri);
 
@@ -348,7 +357,7 @@ function renderAlertas() {
       <span class="alerta-texto">${a.txt}</span>
       ${a.sesion
         ? `<button class="btn-pdf" onclick="window.location.href='verificar.html?sesion=${a.sesion.id}'">Revisar</button>`
-        : a.g.id ? `<button class="btn-leer" onclick="irALectura('${a.g.id}', '${a.g.nombre.replace(/'/g, "\\'")}', '${a.g.curso}', ${a.g.consent ? "true" : "false"})">▶ Leer</button>` : ""}
+        : a.g.id ? `<button class="btn-leer" onclick="irALecturaId('${a.g.id}')">▶ Leer</button>` : ""}
     </div>`).join("");
 }
 
@@ -375,7 +384,7 @@ function poblarFiltro() {
   const sel = document.getElementById("filtro-alumno");
   sel.innerHTML = `<option value="">Media de la clase</option>` +
     grupos.filter(g => g.sesiones.length).sort((a, b) => a.nombre.localeCompare(b.nombre))
-      .map(g => `<option value="${g.id || "n:" + g.nombre}">${g.nombre}</option>`).join("");
+      .map(g => `<option value="${esc(g.id || "n:" + g.nombre)}">${esc(g.nombre)}</option>`).join("");
 }
 
 function dibujarEvolucion() {

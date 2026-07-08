@@ -95,6 +95,14 @@ function setTab(tab) {
 function mostrarError(msg) {
   const el = document.getElementById("error-msg");
   el.textContent = msg;
+  el.style.color = "#E24B4A";
+  el.style.display = "block";
+}
+
+function mostrarAviso(msg) {
+  const el = document.getElementById("error-msg");
+  el.textContent = msg;
+  el.style.color = "#0F6E56";
   el.style.display = "block";
 }
 
@@ -114,8 +122,15 @@ async function registro() {
   const rol = document.getElementById("reg-rol").value;
   if (!nombre || !email || !pass) { mostrarError("Rellena todos los campos"); return; }
   if (pass.length < 6) { mostrarError("La contraseña debe tener al menos 6 caracteres"); return; }
-  const { error } = await sb.auth.signUp({ email, password: pass, options: { data: { nombre, rol } } });
+  const { data, error } = await sb.auth.signUp({ email, password: pass, options: { data: { nombre, rol } } });
   if (error) { mostrarError("Error: " + error.message); return; }
+  // Con "Confirm email" activado en Supabase no hay sesión todavía: avisar
+  // en vez de redirigir al panel (que rebotaría aquí sin explicación).
+  if (!data.session) {
+    setTab("login");
+    mostrarAviso("Cuenta creada. Revisa tu correo y confirma la dirección; después entra con tu contraseña.");
+    return;
+  }
   window.location.href = "panel.html";
 }
 
