@@ -105,11 +105,21 @@ def salud():
     return {"ok": True, "modelo": MODEL_NAME, "device": DEVICE}
 
 
+# Tope de subida: una lectura de 5 min en webm/opus son ~5 MB; 50 MB es margen
+# de sobra y evita que una peticion enorme llene el disco o la memoria del PC.
+MAX_AUDIO_BYTES = 50 * 1024 * 1024
+
+
 @app.post("/evaluar")
-async def evaluar(audio: UploadFile = File(...), usuario: dict = Depends(verificar_sesion)):
-    datos = await audio.read()
+def evaluar(audio: UploadFile = File(...), usuario: dict = Depends(verificar_sesion)):
+    # SINCRONO a proposito: FastAPI lo ejecuta en su threadpool, asi la
+    # transcripcion (que bloquea varios segundos) no congela el event loop
+    # y /salud u otras peticiones siguen respondiendo mientras tanto.
+    datos = audio.file.read(MAX_AUDIO_BYTES + 1)
     if not datos:
         raise HTTPException(status_code=400, detail="audio vacio")
+    if len(datos) > MAX_AUDIO_BYTES:
+        raise HTTPException(status_code=413, detail="audio demasiado grande (max 50 MB)")
 
     # Guardar a temporal: PyAV/ffmpeg decodifica webm/opus, wav, m4a, etc.
     sufijo = os.path.splitext(audio.filename or "")[1] or ".webm"
