@@ -214,6 +214,32 @@ function irALecturaId(id) {
   if (a) irALectura(a.id, a.nombre, a.curso, a.consentimiento_audio);
 }
 
+// Borrado RGPD (derecho de supresión): PRIMERO los archivos de Storage
+// (audios + .raw.json, que el cascade de la BD no toca) y DESPUÉS la ficha
+// (el cascade elimina sesiones y sesion_palabras). Si Storage falla, no se
+// borra nada: así nunca quedan audios huérfanos sin registro en la BD.
+async function borrarAlumno(id) {
+  const a = alumnos.find(x => x.id === id);
+  if (!a) return;
+  const { data: ses, error: eLista } = await sb.from("sesiones").select("id").eq("alumno_id", id);
+  if (eLista) { alert("No se pudieron consultar sus sesiones. No se ha borrado nada; revisa la conexión."); return; }
+  const nSes = (ses || []).length;
+  if (!confirm(`¿Borrar a ${a.nombre}${nSes ? ` y sus ${nSes} lectura(s)` : ""}?\n\nSe eliminarán su ficha, sus sesiones, sus audios y todos sus datos de análisis.\n\nEsta acción NO se puede deshacer.`)) return;
+  if (!confirm("Última confirmación: el borrado es definitivo.")) return;
+
+  if (nSes) {
+    const rutas = ses.flatMap(s => [
+      sesionUsuario.id + "/" + s.id + ".webm",
+      sesionUsuario.id + "/" + s.id + ".raw.json"
+    ]);
+    const { error: eSt } = await sb.storage.from("audios").remove(rutas);
+    if (eSt) { alert("No se pudieron borrar sus audios. No se ha borrado el alumno; inténtalo de nuevo."); return; }
+  }
+  const { error } = await sb.from("alumnos").delete().eq("id", id);
+  if (error) { alert("Sus audios ya se han eliminado, pero falló el borrado de la ficha. Inténtalo de nuevo."); return; }
+  await cargarTodo();
+}
+
 function irALectura(id, nombre, curso, consentimiento) {
   localStorage.setItem("alumno_id", id);
   localStorage.setItem("alumno_nombre", nombre);
@@ -318,6 +344,7 @@ function renderListaAlumnos() {
                   onclick="toggleConsentimiento('${a.id}', ${a.consentimiento_audio ? "true" : "false"})">🎙️</button>
           ${tiene ? `<button class="btn-pdf" onclick="window.location.href='alumno.html?id=${a.id}'">📊 Ver</button>` : ""}
           <button class="btn-leer" onclick="irALecturaId('${a.id}')">▶ Leer</button>
+          <button class="btn-pdf" title="Borrar alumno y TODOS sus datos (ficha, lecturas y audios)" onclick="borrarAlumno('${a.id}')">🗑</button>
         </div>
       </div>`;
   }).join("");
