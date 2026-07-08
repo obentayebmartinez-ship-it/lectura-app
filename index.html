@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LectorIA v3.1</title>
+<title>LectorIA — Lectura</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.1" integrity="sha384-fx4y4cDx8NYfissnVzdGJY3yVXWY3rn5ab5HTUjpvgT35oDiyAbjjqnLhnRmESNE" crossorigin="anonymous"></script>
 <script src="config.js"></script>
 <script src="motor.js"></script>
@@ -61,7 +61,10 @@ body { font-family: system-ui, sans-serif; background: #f5f5f0; color: #111; }
 .quiz { position: fixed; inset: 0; background: #f5f5f0; display: none; flex-direction: column; z-index: 90; padding: 1.1rem 1.1rem 1.4rem; }
 .quiz.show { display: flex; animation: ovIn .18s ease; }
 .quiz-top { max-width: 720px; width: 100%; margin: 0 auto; }
-.quiz-prog-txt { font-size: 12.5px; color: #6b7280; text-align: center; margin-bottom: 0.5rem; }
+.quiz-top-row { display: flex; align-items: center; justify-content: center; position: relative; margin-bottom: 0.5rem; }
+.quiz-prog-txt { font-size: 12.5px; color: #6b7280; text-align: center; }
+.quiz-salir { position: absolute; right: 0; top: -4px; width: 30px; height: 30px; border: none; background: #ececea; color: #9ca3af; border-radius: 8px; font-size: 15px; line-height: 1; cursor: pointer; }
+.quiz-salir:hover { background: #e5e7eb; color: #374151; }
 .quiz-prog { background: #e5e7eb; border-radius: 6px; height: 6px; overflow: hidden; }
 .quiz-prog-fill { height: 100%; background: #378ADD; border-radius: 6px; transition: width .3s; }
 .quiz-mid { max-width: 720px; width: 100%; margin: 0 auto; flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 1rem; }
@@ -105,7 +108,10 @@ body { font-family: system-ui, sans-serif; background: #f5f5f0; color: #111; }
   <!-- Preguntas de comprensión tras la lectura (si el texto tiene banco) -->
   <div class="quiz" id="quiz">
     <div class="quiz-top">
-      <div class="quiz-prog-txt" id="quiz-prog-txt">Pregunta 1</div>
+      <div class="quiz-top-row">
+        <div class="quiz-prog-txt" id="quiz-prog-txt">Pregunta 1</div>
+        <button class="quiz-salir" onclick="salirQuiz()" title="Salir del test (para el docente)">✕</button>
+      </div>
       <div class="quiz-prog"><div class="quiz-prog-fill" id="quiz-prog-fill"></div></div>
     </div>
     <div class="quiz-mid">
@@ -144,6 +150,7 @@ let usuarioActual = null;
 sb.auth.getSession().then(({ data }) => {
   if (!data.session) { window.location.href = "login.html"; return; }
   usuarioActual = data.session.user;
+  elegirLectura();   // necesita la sesión iniciada: consulta las lecturas ya hechas
 });
 
 // ─── Whisper local (motor de reconocimiento propio, sustituye a Azure) ────────
@@ -158,7 +165,11 @@ async function transcribirConWhisper(blob) {
   const token = sesionData?.session?.access_token;
   if (!token) throw new Error("Tu sesión ha caducado. Vuelve a iniciar sesión.");
   const fd = new FormData();
-  fd.append("audio", blob, "lectura.webm");
+  // La extensión debe reflejar el formato REAL de la grabación: Chrome/Firefox
+  // graban webm, pero Safari/iOS graban mp4 (el servidor decodifica por contenido,
+  // esto solo ayuda a ffmpeg a acertar a la primera).
+  const ext = (blob.type || "").includes("mp4") ? "mp4" : (blob.type || "").includes("ogg") ? "ogg" : "webm";
+  fd.append("audio", blob, "lectura." + ext);
   // Timeout de 2 min: si el túnel/servidor se cuelga, abortamos en vez de
   // dejar el botón en "Finalizando..." para siempre.
   const ctrl = new AbortController();
@@ -312,27 +323,46 @@ if (!alumnoId || !alumnoGuardado) {
   document.getElementById("avatar").textContent = ini || "?";
 }
 
-const lecturasDelCurso  = lecturas[cursoAlumno] || lecturas["2P"];
-const sesionesAlumno    = JSON.parse(localStorage.getItem("sesiones_" + alumnoGuardado) || "[]");
-const lecturasHechas    = new Set(sesionesAlumno.map(s => s.texto_id));
-const lecturaPendiente  = lecturasDelCurso.find(l => !lecturasHechas.has(l.id));
-const lecturaActual     = lecturaPendiente || lecturasDelCurso[0];
-const numLectura        = lecturasDelCurso.findIndex(l => l.id === lecturaActual.id) + 1;
+const lecturasDelCurso = lecturas[cursoAlumno] || lecturas["2P"];
+let lecturaActual = null;
+let textOriginal  = "";
+let palabras      = [];
 
-document.getElementById("nivel-badge").textContent   = "Lectura " + numLectura + "/" + lecturasDelCurso.length;
-document.getElementById("materia-linea").textContent = lecturaActual.materia + " · " + lecturaActual.titulo;
+// La lectura pendiente se decide con las sesiones REALES del alumno en
+// Supabase (antes era localStorage por nombre: no cruzaba dispositivos y
+// colisionaba entre alumnos homónimos). Si la consulta falla (sin conexión),
+// se usa el localStorage como respaldo. Se llama al confirmar la sesión.
+async function elegirLectura() {
+  let hechas = null;
+  try {
+    const { data, error } = await sb.from("sesiones").select("texto_id")
+      .eq("alumno_id", alumnoId).gt("ppm", 0);
+    if (!error && data) hechas = new Set(data.map(s => s.texto_id));
+  } catch (e) { console.warn("No se pudieron cargar las sesiones previas:", e); }
+  if (!hechas) {
+    const ses = JSON.parse(localStorage.getItem("sesiones_" + alumnoGuardado) || "[]");
+    hechas = new Set(ses.map(s => s.texto_id));
+  }
 
-const textOriginal = lecturaActual.texto;
-const palabras     = textOriginal.split(" ");
+  lecturaActual = lecturasDelCurso.find(l => !hechas.has(l.id)) || lecturasDelCurso[0];
+  const numLectura = lecturasDelCurso.findIndex(l => l.id === lecturaActual.id) + 1;
 
-const textoEl = document.getElementById("texto");
-palabras.forEach((p, i) => {
-  const span = document.createElement("span");
-  span.className   = "word";
-  span.id          = "w" + i;
-  span.textContent = p + " ";
-  textoEl.appendChild(span);
-});
+  document.getElementById("nivel-badge").textContent   = "Lectura " + numLectura + "/" + lecturasDelCurso.length;
+  document.getElementById("materia-linea").textContent = lecturaActual.materia + " · " + lecturaActual.titulo;
+
+  textOriginal = lecturaActual.texto;
+  palabras     = textOriginal.split(" ");
+
+  const textoEl = document.getElementById("texto");
+  textoEl.innerHTML = "";
+  palabras.forEach((p, i) => {
+    const span = document.createElement("span");
+    span.className   = "word";
+    span.id          = "w" + i;
+    span.textContent = p + " ";
+    textoEl.appendChild(span);
+  });
+}
 
 // ─── Estado de sesión ────────────────────────────────────────────────────────
 let grabando      = false;
@@ -356,6 +386,7 @@ let guardado       = null;      // estado por fases del guardado (permite reinte
 
 // ─── Toggle ──────────────────────────────────────────────────────────────────
 function toggleLectura() {
+  if (!lecturaActual) return;   // el texto aún no ha cargado (elegirLectura)
   if (!grabando) iniciar(); else parar();
 }
 
@@ -419,6 +450,8 @@ async function parar() {
   if (!grabando) return;
   grabando = false;
   clearInterval(timer);
+  // Duración exacta de reloj (el interval solo actualizaba cada segundo)
+  if (inicio) segundos = Math.round((Date.now() - inicio) / 1000);
 
   // Cerrar la grabación de audio; el mismo blob se transcribe y luego se sube.
   audioListo = new Promise(resolve => {
@@ -603,6 +636,17 @@ function responder(opElegida, boton) {
       if (_quizDone) _quizDone();
     }
   }, 180);
+}
+
+// Salida de emergencia (docente): cierra el test sin resultado de comprensión.
+// La lectura YA está guardada (guardarCritico corre antes del quiz), así que
+// solo se pierde el dato del test, nunca la sesión.
+function salirQuiz() {
+  if (!confirm("¿Salir del test de comprensión?\n\nLa lectura ya está guardada; se cerrará sin resultado de comprensión.")) return;
+  comprensionAciertos = null; comprensionTotal = null; comprensionDetalle = null;
+  try { if (window.speechSynthesis) window.speechSynthesis.cancel(); } catch (e) {}
+  document.getElementById("quiz").classList.remove("show");
+  if (_quizDone) _quizDone();
 }
 
 // Leer en voz alta la pregunta y sus opciones (síntesis del navegador, gratis y
