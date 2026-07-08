@@ -312,7 +312,7 @@
 
       // Explicación de cómo se leen los niveles (evita que el color, ahora
       // neutro, se malinterprete: un "3" no siempre es bueno ni malo)
-      const explic = "Cómo se leen los niveles: cada dimensión se valora como «Requiere trabajo», «Reforzar» o «En nivel» (de menos a más logrado). La velocidad se calcula sobre el objetivo del curso, la entonación con el análisis de voz, los errores por su frecuencia cada 100 palabras y la comprensión con el test de preguntas de la lectura. Silabeo y rotación los valora el profesional por observación directa.";
+      const explic = "Cómo se leen los niveles: cada dimensión se valora como «Requiere trabajo», «Reforzar» o «En nivel» (de menos a más logrado). La velocidad se calcula sobre el objetivo del curso, la entonación se estima por las pausas y el ritmo (y la confirma el profesional), los errores por su frecuencia cada 100 palabras y la comprensión con el test de preguntas de la lectura. Silabeo y rotación los valora el profesional por observación directa.";
       const linExp = doc.splitTextToSize(explic, 182);
       if (y + linExp.length * 3.3 > 286) { doc.addPage(); y = 18; }
       doc.setFontSize(7.5); doc.setFont("helvetica", "normal"); doc.setTextColor.apply(doc, GRIS);

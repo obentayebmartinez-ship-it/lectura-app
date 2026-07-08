@@ -163,7 +163,7 @@ const LEYENDA = [
 const DIMENSIONES = [
   { grupo: "Fluidez lectora", items: [
     { key: "silabeo",           label: "Silabeo",             manual: true,  sub: "solo observación directa" },
-    { key: "pausas_entonacion", label: "Pausas y entonación", positivo: true, sub: "entonación y ritmo · escucha el audio para valorar" },
+    { key: "pausas_entonacion", label: "Pausas y entonación", positivo: true, sub: "estimada por pausas · escucha el audio para confirmar" },
     { key: "vacilacion",        label: "Vacilación",          tipo: "vacilacion" },
     { key: "rectificacion",     label: "Rectificación",       tipo: "rectificacion" },
     { key: "repeticion",        label: "Repetición",          tipo: "repeticion" },
@@ -193,7 +193,7 @@ const CRIT_ERROR = "Se mide por frecuencia: veces que aparece por cada 100 palab
   "«En nivel» ≤1 · «Reforzar» entre 1 y 4 · «Requiere trabajo» más de 4. La IA lo propone y tú lo confirmas o lo cambias.";
 const COMO_SE_MIDE = {
   velocidad: "Velocidad lectora (PPM) frente al objetivo del curso. «En nivel» ≥100% del objetivo · «Reforzar» 80–99% · «Requiere trabajo» menos del 80%.",
-  pausas_entonacion: "Entonación y ritmo al leer. El reconocedor actual no la mide solo: valórala tú escuchando el audio.",
+  pausas_entonacion: "Entonación y ritmo al leer, ESTIMADOS con las pausas: pausar en los signos de puntuación suma; las pausas largas a mitad de frase restan. «En nivel» ≥75 · «Reforzar» 50–74 · «Requiere trabajo» <50. Es una aproximación: confírmala escuchando el audio.",
   silabeo: "Si lee sílaba a sílaba en vez de palabras enteras. Se valora por observación directa durante la lectura.",
   rotacion: "Confusión de letras espejo (b/d, p/q). Es un error visual: se valora por observación directa.",
   comprension: "Cuánto entiende de lo leído. Se mide con las preguntas tipo test que responde el alumno al terminar: «En nivel» ≥80% de aciertos · «Reforzar» 50–79% · «Requiere trabajo» menos del 50%. Si la lectura no tenía preguntas, valóralo tú.",
@@ -280,6 +280,21 @@ function calcularMedidas() {
     inversion:     m(cuenta("inversion")),
     adicion:       m(cuenta("adicion"))
   };
+  // Pausas y entonación: respeto de la puntuación medido con los silencios
+  // (gap_ms) registrados palabra a palabra en el orden de lectura.
+  const FIN_FRASE = /[.!?…;:]$/;
+  const habladas = palabras.filter(p => p.offset_ms != null);
+  let puntTotal = 0, puntPausa = 0;
+  for (let i = 0; i < habladas.length - 1; i++) {
+    if (habladas[i].palabra_ref && FIN_FRASE.test(habladas[i].palabra_ref)) {
+      puntTotal++;
+      if ((habladas[i + 1].gap_ms || 0) >= 250) puntPausa++;
+    }
+  }
+  if (puntTotal > 0) {
+    medidas.pausas_entonacion = `pausa en ${puntPausa} de ${puntTotal} signos de puntuación` +
+      (sesion.prosody ? ` · entonación estimada ${sesion.prosody}/100` : "");
+  }
   if (sesion.comprension_total > 0) {
     const pct = Math.round(sesion.comprension_aciertos / sesion.comprension_total * 100);
     medidas.comprension = `${sesion.comprension_aciertos} de ${sesion.comprension_total} preguntas acertadas · ${pct}%`;

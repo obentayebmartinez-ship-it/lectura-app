@@ -24,7 +24,7 @@
 })(typeof self !== "undefined" ? self : this, function () {
 "use strict";
 
-const VERSION = "motor v3.4";
+const VERSION = "motor v3.5";
 
 // ─── Umbrales del clasificador (calibrables con calibrar.js) ─────────────────
 const UMBRALES_DEFECTO = {
@@ -38,7 +38,9 @@ const UMBRALES_DEFECTO = {
   pausaMult:          3,        // × gap mediano del propio alumno
   pausaPuntMinTicks:  20000000, // suelo del umbral tras puntuación (2 s)
   pausaPuntMult:      2.5,      // × umbral de pausa normal
-  solapeTicks:        500000    // solape mínimo para considerar un duplicado artefacto (50 ms)
+  solapeTicks:        500000,   // solape mínimo para considerar un duplicado artefacto (50 ms)
+  prosPausaMinTicks:  2500000,  // pausa mínima que "respeta" un signo de puntuación (0.25 s)
+  prosPausaMult:      2         // × gap mediano del propio alumno (prosodia aproximada)
 };
 
 // ─── Muletillas habladas que NO deben contarse como adición ──────────────────
@@ -419,6 +421,12 @@ function analizar(entrada, umbralesExtra) {
   const umbralPausaPunt  = Math.max(U.pausaPuntMinTicks, umbralPausa * U.pausaPuntMult);
   let pausasLargas = 0;   // se cuentan durante la clasificación (con contexto)
 
+  // Prosodia APROXIMADA (Whisper no la mide): pausa audible tras un signo de
+  // fin de frase = bueno; pausa larga a mitad de frase = rompe el ritmo.
+  const umbralPausaProsodia = Math.max(U.prosPausaMinTicks, gapMediano * U.prosPausaMult);
+  const FIN_FRASE_PROS = /[.!?…;:]$/;
+  let prosPuntTotal = 0, prosPuntPausa = 0, prosPausasFuera = 0;
+
   // 4. Clasificar
   let omisiones=0, sustituciones=0, adiciones=0, inversiones=0;
   let repeticiones=0, rectificaciones=0, vacilaciones=0, correctas=0;
@@ -526,6 +534,16 @@ function analizar(entrada, umbralesExtra) {
     const w       = spoken[item.spokenIdx];
     const origN   = normalizar(item.orig);
     const spokenN = normalizar(item.spoken);
+
+    // Prosodia aproximada: ¿hubo pausa audible tras el signo de fin de frase
+    // anterior? ¿O una pausa larga donde no tocaba (a mitad de frase)?
+    if (item.spokenIdx > 0 && item.origIdx > 0) {
+      const gp = gapAntes.get(item.spokenIdx) || 0;
+      if (FIN_FRASE_PROS.test(palabrasDisplay[item.origIdx - 1])) {
+        prosPuntTotal++;
+        if (gp >= umbralPausaProsodia) prosPuntPausa++;
+      } else if (gp > umbralPausa) prosPausasFuera++;
+    }
     // _fon = forma fonética de referencia (para romanos, el cardinal; para el
     // resto, la propia palabra). _alt = otras lecturas válidas (ordinal romano).
     const exacta  = (origN === spokenN) || (fonetica(item._fon) === fonetica(item.spoken))
@@ -606,13 +624,26 @@ function analizar(entrada, umbralesExtra) {
   const precision = totalRef > 0 ? Math.round(correctas / totalRef * 100) : 0;
   const fCount    = entrada.fluencyCount || 0, pCount = entrada.prosodyCount || 0;
   const fluency   = fCount > 0 ? Math.round((entrada.fluencyTotal || 0) / fCount) : precision;
-  const prosody   = pCount > 0 ? Math.round((entrada.prosodyTotal || 0) / pCount) : 0;
+  // Prosodia: Azure la medía (prosodyTotal); Whisper no. Sin medida directa se
+  // APROXIMA con las pausas: respeto de la puntuación (60%) — % de signos de
+  // fin de frase seguidos de pausa audible — y ritmo (40%) — ausencia de
+  // pausas largas a mitad de frase, por cada 100 palabras leídas.
+  let prosody = pCount > 0 ? Math.round((entrada.prosodyTotal || 0) / pCount) : 0;
+  if (pCount === 0 && prosPuntTotal > 0 && leidas > 0) {
+    const respeto   = prosPuntPausa / prosPuntTotal;
+    const tasaFuera = prosPausasFuera / leidas * 100;   // pausas fuera de puntuación /100 palabras
+    const ritmo     = Math.max(0, 1 - tasaFuera / 10);  // 10 por cada 100 → ritmo 0
+    prosody = Math.round(100 * (0.6 * respeto + 0.4 * ritmo));
+  }
 
   return {
     version: VERSION,
     metricas: { ppm, precision, fluency, prosody, omisiones, sustituciones, adiciones,
                 inversiones, repeticiones, rectificaciones, vacilaciones, pausasLargas,
-                correctas, leidas, totalRef, segLectura: Math.round(segLectura) },
+                correctas, leidas, totalRef, segLectura: Math.round(segLectura),
+                // Base de la prosodia aproximada (para diagnóstico y calibración)
+                respetoPuntuacion: prosPuntTotal > 0 ? Math.round(prosPuntPausa / prosPuntTotal * 100) : null,
+                pausasFueraPuntuacion: prosPausasFuera },
     detallePalabras,
     ui: { porPalabra, errores: errDetalle, observaciones: obsDetalle },
     diag: {
