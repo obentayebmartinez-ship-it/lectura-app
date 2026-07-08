@@ -36,6 +36,11 @@
     .add-alumno { display: flex; gap: 8px; margin-bottom: 1rem; flex-wrap: wrap; }
     .add-alumno input, .add-alumno select { padding: 8px 12px; border-radius: 8px; border: 0.5px solid #e5e7eb; font-size: 13px; flex: 1; min-width: 120px; color: #111; outline: none; }
     .add-alumno input:focus, .add-alumno select:focus { border-color: #1D9E75; }
+    .consent-check { display: flex; align-items: flex-start; gap: 7px; font-size: 12px; color: #6b7280; margin: -0.4rem 0 1rem; cursor: pointer; line-height: 1.4; }
+    .consent-check input { accent-color: #1D9E75; margin-top: 2px; }
+    .consent-check a { color: #378ADD; }
+    .btn-consent { font-size: 12px; padding: 5px 8px; border-radius: 8px; border: 0.5px solid #e5e7eb; background: #fff; cursor: pointer; }
+    .btn-consent.no { opacity: 0.45; filter: grayscale(1); }
     .btn-add { padding: 8px 16px; border-radius: 8px; border: none; background: #1D9E75; color: #fff; font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; }
     .alumno-fila { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 0.5px solid #f3f4f6; font-size: 13px; }
     .alumno-fila:last-child { border-bottom: none; }
@@ -118,6 +123,10 @@
       </select>
       <button class="btn-add" onclick="añadirAlumno()">+ Añadir</button>
     </div>
+    <label class="consent-check">
+      <input type="checkbox" id="nuevo-consent">
+      <span>Tengo el <a href="consentimiento-informado-lectoria.pdf" target="_blank">consentimiento firmado</a> de la familia para grabar su voz. Sin marcarlo, las lecturas se analizan igual pero <b>no se guarda el audio</b>.</span>
+    </label>
     <div id="lista-mis-alumnos"><div class="loading">Cargando alumnos...</div></div>
   </div>
   <div class="card">
@@ -174,17 +183,35 @@ async function cerrarSesion() {
 async function añadirAlumno() {
   const nombre = document.getElementById("nuevo-nombre").value.trim();
   const curso = document.getElementById("nuevo-curso").value;
+  const consentimiento = document.getElementById("nuevo-consent").checked;
   if (!nombre) { alert("Introduce el nombre del alumno"); return; }
-  const { error } = await sb.from("alumnos").insert({ nombre, curso, user_id: sesionUsuario.id });
+  const { error } = await sb.from("alumnos").insert({ nombre, curso, user_id: sesionUsuario.id, consentimiento_audio: consentimiento });
   if (error) { alert("Error al añadir alumno"); return; }
   document.getElementById("nuevo-nombre").value = "";
+  document.getElementById("nuevo-consent").checked = false;
   await cargarTodo();
 }
 
-function irALectura(id, nombre, curso) {
+// Consentimiento de grabación: se puede activar/retirar en cualquier momento.
+// Sin él, las lecturas se analizan igual pero el audio NO se sube a Storage.
+async function toggleConsentimiento(id, actual) {
+  const nuevo = !actual;
+  const msg = nuevo
+    ? "¿Confirmas que tienes el consentimiento FIRMADO de la familia para grabar la voz de este alumno?\n\nSus próximas lecturas guardarán el audio."
+    : "¿Retirar el consentimiento de audio de este alumno?\n\nSus próximas lecturas se analizarán sin guardar la grabación.";
+  if (!confirm(msg)) return;
+  const { error } = await sb.from("alumnos").update({ consentimiento_audio: nuevo }).eq("id", id);
+  if (error) { alert("No se pudo actualizar el consentimiento"); return; }
+  await cargarTodo();
+}
+
+function irALectura(id, nombre, curso, consentimiento) {
   localStorage.setItem("alumno_id", id);
   localStorage.setItem("alumno_nombre", nombre);
   localStorage.setItem("alumno_curso", curso);
+  // index.html lo usa para decidir si SUBE el audio (sin consentimiento se
+  // analiza igual, pero la grabación no se guarda)
+  localStorage.setItem("alumno_consent_audio", consentimiento ? "1" : "0");
   window.location.href = "index.html";
 }
 
@@ -199,7 +226,7 @@ async function cargarTodo() {
 
   // Agrupa por alumno_id; los alumnos sin sesiones también aparecen
   const porId = {};
-  alumnos.forEach(a => { porId[a.id] = { id: a.id, nombre: a.nombre, curso: a.curso, objetivo: objetivoDe(a.curso), sesiones: [] }; });
+  alumnos.forEach(a => { porId[a.id] = { id: a.id, nombre: a.nombre, curso: a.curso, consent: !!a.consentimiento_audio, objetivo: objetivoDe(a.curso), sesiones: [] }; });
   sesiones.forEach(s => {
     const g = porId[s.alumno_id];
     if (g) g.sesiones.push(s);
@@ -277,8 +304,11 @@ function renderListaAlumnos() {
           ${stats}
         </div>
         <div class="alumno-derecha">
+          <button class="btn-consent ${a.consentimiento_audio ? "" : "no"}"
+                  title="${a.consentimiento_audio ? "Consentimiento de audio: SÍ — se guarda la grabación de sus lecturas. Pulsa para retirarlo." : "Consentimiento de audio: NO — sus lecturas se analizan sin guardar el audio. Pulsa si ya tienes el consentimiento firmado."}"
+                  onclick="toggleConsentimiento('${a.id}', ${a.consentimiento_audio ? "true" : "false"})">🎙️</button>
           ${tiene ? `<button class="btn-pdf" onclick="window.location.href='alumno.html?id=${a.id}'">📊 Ver</button>` : ""}
-          <button class="btn-leer" onclick="irALectura('${a.id}', '${a.nombre.replace(/'/g, "\\'")}', '${a.curso}')">▶ Leer</button>
+          <button class="btn-leer" onclick="irALectura('${a.id}', '${a.nombre.replace(/'/g, "\\'")}', '${a.curso}', ${a.consentimiento_audio ? "true" : "false"})">▶ Leer</button>
         </div>
       </div>`;
   }).join("");
@@ -318,7 +348,7 @@ function renderAlertas() {
       <span class="alerta-texto">${a.txt}</span>
       ${a.sesion
         ? `<button class="btn-pdf" onclick="window.location.href='verificar.html?sesion=${a.sesion.id}'">Revisar</button>`
-        : a.g.id ? `<button class="btn-leer" onclick="irALectura('${a.g.id}', '${a.g.nombre.replace(/'/g, "\\'")}', '${a.g.curso}')">▶ Leer</button>` : ""}
+        : a.g.id ? `<button class="btn-leer" onclick="irALectura('${a.g.id}', '${a.g.nombre.replace(/'/g, "\\'")}', '${a.g.curso}', ${a.g.consent ? "true" : "false"})">▶ Leer</button>` : ""}
     </div>`).join("");
 }
 

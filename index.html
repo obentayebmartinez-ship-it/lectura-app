@@ -298,6 +298,10 @@ const lecturas = {
 const alumnoId       = localStorage.getItem("alumno_id")     || "";
 const alumnoGuardado = localStorage.getItem("alumno_nombre") || "";
 const cursoAlumno    = localStorage.getItem("alumno_curso")  || "2P";
+// Consentimiento de grabación (lo fija el panel desde la ficha del alumno).
+// Sin él se lee y analiza igual (el audio viaja a Whisper solo para
+// transcribirse), pero la grabación NO se guarda en Storage.
+const consentimientoAudio = localStorage.getItem("alumno_consent_audio") === "1";
 
 if (!alumnoId || !alumnoGuardado) {
   window.location.href = "panel.html";
@@ -636,9 +640,10 @@ async function guardarCritico() {
     }
     const g = guardado;
 
-    // 1. Subir el audio grabado (evidencia para verificar + dataset).
-    // Si falla, NO bloquea el guardado de la sesión: mejor sin audio que perdida.
-    if (!g.audioPath) {
+    // 1. Subir el audio grabado (evidencia para verificar + dataset), SOLO si
+    // hay consentimiento de la familia. Si falla la subida, NO bloquea el
+    // guardado de la sesión: mejor sin audio que perdida.
+    if (!g.audioPath && consentimientoAudio) {
       const blob = audioListo ? await audioListo : null;
       if (blob) {
         const path = usuarioActual.id + "/" + g.sesionId + ".webm";

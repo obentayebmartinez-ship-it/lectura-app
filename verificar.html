@@ -233,18 +233,19 @@ async function init() {
   if (sesion.audio_path) {
     const { data: urlData } = await sb.storage.from("audios").createSignedUrl(sesion.audio_path, 3600);
     if (urlData?.signedUrl) sesion._audioUrl = urlData.signedUrl;
+  }
 
-    // Detalle pregunta a pregunta del test de comprensión (vive en el .raw.json,
-    // junto al audio). Es opcional: si falla o la sesión no tenía test, se omite.
-    if (sesion.comprension_total > 0) {
-      const rawPath = sesion.audio_path.replace(/\.webm$/, ".raw.json");
-      const { data: rurl } = await sb.storage.from("audios").createSignedUrl(rawPath, 3600);
-      if (rurl?.signedUrl) {
-        try {
-          const j = await fetch(rurl.signedUrl).then(r => r.json());
-          sesion._comprension = j?.comprension || null;
-        } catch (e) { console.warn("No se pudo cargar el detalle de comprensión:", e); }
-      }
+  // Detalle pregunta a pregunta del test de comprensión (vive en el .raw.json).
+  // Se carga aunque la sesión no tenga audio (p.ej. sin consentimiento de
+  // grabación). Es opcional: si falla o la sesión no tenía test, se omite.
+  if (sesion.comprension_total > 0) {
+    const rawPath = sesion.user_id + "/" + sesion.id + ".raw.json";
+    const { data: rurl } = await sb.storage.from("audios").createSignedUrl(rawPath, 3600);
+    if (rurl?.signedUrl) {
+      try {
+        const j = await fetch(rurl.signedUrl).then(r => r.json());
+        sesion._comprension = j?.comprension || null;
+      } catch (e) { console.warn("No se pudo cargar el detalle de comprensión:", e); }
     }
   }
 
@@ -373,7 +374,7 @@ function render() {
           </div>
           ${sesion._audioUrl
             ? `<audio id="audio" controls src="${sesion._audioUrl}"></audio>`
-            : `<div class="nota">Sin audio grabado en esta sesión — la verificación se hace de memoria.</div>`}
+            : `<div class="nota">Sin audio guardado en esta sesión (sin consentimiento de grabación o fallo al subirlo) — la verificación se hace de memoria.</div>`}
         </div>
         <div class="card">
           <div class="card-title">Lectura — pulsa cualquier palabra para escucharla o corregir su marca</div>
