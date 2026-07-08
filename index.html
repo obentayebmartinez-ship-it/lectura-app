@@ -125,6 +125,7 @@ body { font-family: system-ui, sans-serif; background: #f5f5f0; color: #111; }
       <div class="overlay-title" id="result-title">¡Muy bien!</div>
       <div class="overlay-sub" id="overlay-sub">Guardando la lectura…</div>
       <div class="overlay-btns">
+        <button class="btn azul" id="reintentar-btn" onclick="reintentarGuardado()" style="display:none">🔄 Reintentar guardado</button>
         <button class="btn azul" id="verificar-btn" onclick="irVerificar()" disabled>✔ Verificar sesión</button>
         <button class="btn gris" onclick="window.location.href='panel.html'">Volver al panel</button>
       </div>
@@ -158,11 +159,25 @@ async function transcribirConWhisper(blob) {
   if (!token) throw new Error("Tu sesión ha caducado. Vuelve a iniciar sesión.");
   const fd = new FormData();
   fd.append("audio", blob, "lectura.webm");
-  const res = await fetch(WHISPER_API_URL + "/evaluar", {
-    method: "POST",
-    headers: { "Authorization": "Bearer " + token },
-    body: fd,
-  });
+  // Timeout de 2 min: si el túnel/servidor se cuelga, abortamos en vez de
+  // dejar el botón en "Finalizando..." para siempre.
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 120000);
+  let res;
+  try {
+    res = await fetch(WHISPER_API_URL + "/evaluar", {
+      method: "POST",
+      headers: { "Authorization": "Bearer " + token },
+      body: fd,
+      signal: ctrl.signal,
+    });
+  } catch (e) {
+    throw new Error(ctrl.signal.aborted
+      ? "El servidor de reconocimiento no respondió en 2 minutos."
+      : "No hay conexión con el servidor de reconocimiento.");
+  } finally {
+    clearTimeout(t);
+  }
   if (!res.ok) {
     const txt = await res.text().catch(() => "");
     throw new Error("El servidor de reconocimiento falló: " + (txt || res.status));
@@ -333,6 +348,7 @@ let audioChunks   = [];
 let micStream     = null;
 let audioListo    = null;       // Promise que resuelve al Blob grabado (o null)
 let ultimaSesionId = null;      // id de la sesión guardada (para "Verificar")
+let guardado       = null;      // estado por fases del guardado (permite reintentar sin duplicar)
 
 // ─── Toggle ──────────────────────────────────────────────────────────────────
 function toggleLectura() {
@@ -384,6 +400,8 @@ async function iniciar() {
     grabando = false;
     clearInterval(timer);
     if (micStream) micStream.getTracks().forEach(t => t.stop());
+    document.getElementById("prog-wrap").classList.remove("listening");
+    document.getElementById("msg").textContent = "Lee el texto en voz alta cuando estés listo";
     alert("No se pudo acceder al micrófono:\n" + err.message);
     resetBtn();
   }
@@ -416,14 +434,21 @@ async function parar() {
   document.getElementById("msg").textContent = "Analizando la lectura…";
 
   // Enviar el audio al servidor Whisper y recoger las palabras reconocidas.
-  try {
-    const blob = await audioListo;
-    allWords = await transcribirConWhisper(blob);
-  } catch (err) {
-    console.error("Error al transcribir con Whisper:", err);
-    alert("No se pudo analizar la lectura.\n" + err.message +
-          "\n\n¿Está encendido el servidor de reconocimiento?");
-    allWords = [];
+  // Si falla (servidor apagado, sin conexión), se ofrece REINTENTAR con el
+  // mismo audio: la grabación sigue en memoria y no hay que repetir la lectura.
+  const blob = await audioListo;
+  while (true) {
+    try {
+      allWords = await transcribirConWhisper(blob);
+      break;
+    } catch (err) {
+      console.error("Error al transcribir con Whisper:", err);
+      const reintentar = confirm("No se pudo analizar la lectura.\n" + err.message +
+            "\n\n¿Está encendido el servidor de reconocimiento?\n\n" +
+            "Aceptar = reintentar el análisis con el mismo audio\n" +
+            "Cancelar = continuar sin análisis");
+      if (!reintentar) { allWords = []; break; }
+    }
   }
   mostrarResultados();
 }
@@ -462,17 +487,26 @@ function mostrarResultados() {
   // ANTES de cerrar; el resultado (aciertos/total) se guarda con la sesión y en
   // verificar.html deriva el nivel de comprensión. Si no hay banco, se cierra
   // directamente y la comprensión queda como campo manual del docente.
+  // Guardar la parte crítica (sesión + detalle + audio) YA, antes del test de
+  // comprensión: si la página se cierra durante el quiz, la lectura no se
+  // pierde. La comprensión se añade después con un update (guardarComplemento).
+  guardado = { sesionId: crypto.randomUUID(), m, detallePalabras: res.detallePalabras,
+               entradaMotor, audioPath: null, audioEnlazado: false,
+               sesionOk: false, palabrasOk: false, rawOk: false, compOk: false,
+               promesa: null };
+  guardado.promesa = guardarCritico();
+
   const preguntas = (typeof PREGUNTAS !== "undefined" && PREGUNTAS[lecturaActual.id]) || [];
   if (preguntas.length > 0) {
-    iniciarQuiz(preguntas, () => finalizarSesion(m, res.detallePalabras, entradaMotor));
+    iniciarQuiz(preguntas, () => finalizarSesion(m));
   } else {
     comprensionAciertos = null; comprensionTotal = null; comprensionDetalle = null;
-    finalizarSesion(m, res.detallePalabras, entradaMotor);
+    finalizarSesion(m);
   }
 }
 
 // ─── Cierre de sesión: mensaje de ánimo + guardado ───────────────────────────
-function finalizarSesion(m, detallePalabras, entradaMotor) {
+function finalizarSesion(m) {
   // Mensaje de ánimo (sin números ni marcas de error). El detalle —PPM,
   // errores, niveles— lo revisa el docente en verificar.html y en el panel.
   const totalErr     = m.omisiones + m.sustituciones + m.inversiones;
@@ -496,7 +530,7 @@ function finalizarSesion(m, detallePalabras, entradaMotor) {
     aciertos: comprensionAciertos, total: comprensionTotal, respuestas: comprensionDetalle
   };
 
-  guardarSesion(m, detallePalabras, entradaMotor);
+  finalizarGuardado();
 }
 
 // ─── Preguntas de comprensión ────────────────────────────────────────────────
@@ -580,98 +614,168 @@ function oirPregunta() {
 }
 
 // ─── Guardar sesión (audio + métricas + detalle palabra a palabra) ───────────
+// En DOS FASES, con estado por paso para poder REINTENTAR sin duplicar nada:
+//   guardarCritico()     → audio + fila de sesiones + sesion_palabras.
+//                          Corre en cuanto acaba el análisis, ANTES del quiz:
+//                          si la página se cierra durante el test, la lectura
+//                          ya está a salvo.
+//   guardarComplemento() → .raw.json del motor (incluye el detalle del test)
+//                          + update de los aciertos de comprensión. Corre al
+//                          cerrar el quiz (finalizarGuardado).
 // OJO: supabase-js no lanza excepciones, devuelve {error} — se comprueba a mano.
-async function guardarSesion(m, detallePalabras, entradaMotor) {
+
+// Un "duplicado" al reintentar significa que ese paso YA se completó: es éxito.
+const esDuplicado = e => e && (e.code === "23505" || /already exists|duplicate/i.test(e.message || ""));
+
+async function guardarCritico() {
   try {
     if (!usuarioActual) {
       const { data } = await sb.auth.getSession();
       usuarioActual = data.session?.user || null;
-      if (!usuarioActual) { console.error("Sin sesión de usuario: no se puede guardar"); errorGuardado(); return; }
+      if (!usuarioActual) { console.error("Sin sesión de usuario: no se puede guardar"); return false; }
     }
-    const sesionId = crypto.randomUUID();
+    const g = guardado;
 
-    // 1. Subir el audio grabado (evidencia para verificar + dataset)
-    let audioPath = null;
-    const blob = audioListo ? await audioListo : null;
-    if (blob) {
-      const path = usuarioActual.id + "/" + sesionId + ".webm";
-      const { error: eAudio } = await sb.storage.from("audios")
-        .upload(path, blob, { contentType: blob.type || "audio/webm" });
-      if (eAudio) console.error("Error subiendo audio (la sesión se guarda sin él):", eAudio);
-      else audioPath = path;
+    // 1. Subir el audio grabado (evidencia para verificar + dataset).
+    // Si falla, NO bloquea el guardado de la sesión: mejor sin audio que perdida.
+    if (!g.audioPath) {
+      const blob = audioListo ? await audioListo : null;
+      if (blob) {
+        const path = usuarioActual.id + "/" + g.sesionId + ".webm";
+        const { error: eAudio } = await sb.storage.from("audios")
+          .upload(path, blob, { contentType: blob.type || "audio/webm" });
+        if (!eAudio || esDuplicado(eAudio)) g.audioPath = path;
+        else console.error("Error subiendo audio (la sesión se guarda sin él):", eAudio);
+      }
     }
 
-    // 1b. Subir la entrada cruda del motor: junto con las correcciones del
-    // docente es lo que permite reanalizar la sesión offline y calibrar los
-    // umbrales con calibrar.js. Mismo bucket y carpeta que el audio.
-    if (entradaMotor) {
+    // 2. Guardar la sesión ligada al alumno real. La comprensión va a null:
+    // el quiz aún no se ha hecho (se añade luego en guardarComplemento).
+    if (!g.sesionOk) {
+      const { error } = await sb.from("sesiones").insert({
+        id:                g.sesionId,
+        user_id:           usuarioActual.id,
+        alumno_id:         alumnoId,
+        alumno_nombre:     alumnoGuardado,
+        texto_id:          lecturaActual.id,
+        texto_titulo:      lecturaActual.titulo,
+        curso:             cursoAlumno,
+        ppm:               g.m.ppm,
+        precision:         g.m.precision,
+        fluency:           g.m.fluency,
+        prosody:           g.m.prosody,
+        omisiones:         g.m.omisiones,
+        sustituciones:     g.m.sustituciones,
+        adiciones:         g.m.adiciones,
+        inversiones:       g.m.inversiones,
+        repeticiones:      g.m.repeticiones,
+        rectificaciones:   g.m.rectificaciones,
+        vacilaciones:      g.m.vacilaciones,
+        pausas_largas:     g.m.pausasLargas,
+        duracion_segundos: segundos,
+        audio_path:        g.audioPath,
+        comprension_aciertos: null,
+        comprension_total:    null,
+        fecha:             new Date().toISOString()
+      });
+      if (error && !esDuplicado(error)) { console.error("Supabase error:", error); return false; }
+      g.sesionOk = true;
+      g.audioEnlazado = !!g.audioPath;
+    }
+
+    // Si el audio se subió en un reintento POSTERIOR a crear la fila, engancharlo
+    if (g.sesionOk && g.audioPath && !g.audioEnlazado) {
+      const { error: eUp } = await sb.from("sesiones").update({ audio_path: g.audioPath }).eq("id", g.sesionId);
+      if (!eUp) g.audioEnlazado = true;
+    }
+
+    // 3. Guardar el detalle palabra a palabra (lo que revisará el docente)
+    if (!g.palabrasOk) {
+      if (g.detallePalabras && g.detallePalabras.length > 0) {
+        const filas = g.detallePalabras.map(p => ({ ...p, sesion_id: g.sesionId, user_id: usuarioActual.id }));
+        const { error: eDet } = await sb.from("sesion_palabras").insert(filas);
+        if (eDet) { console.error("Error guardando el detalle de palabras:", eDet); return false; }
+      }
+      g.palabrasOk = true;
+    }
+    return true;
+  } catch (e) {
+    console.error("Error guardando sesión:", e);
+    return false;
+  }
+}
+
+async function guardarComplemento() {
+  const g = guardado;
+  try {
+    // 1b. Subir la entrada cruda del motor (con el detalle del test): junto con
+    // las correcciones del docente es lo que permite reanalizar la sesión
+    // offline y calibrar los umbrales con calibrar.js. Mismo bucket que el audio.
+    if (!g.rawOk && g.entradaMotor) {
       const raw = new Blob([JSON.stringify({
         version:      MotorLectura.VERSION,
         fecha:        new Date().toISOString(),
         texto_id:     lecturaActual.id,
         texto_titulo: lecturaActual.titulo,
         curso:        cursoAlumno,
-        entrada:      entradaMotor,
+        entrada:      g.entradaMotor,
         comprension:  comprensionDetalle ? { aciertos: comprensionAciertos, total: comprensionTotal, respuestas: comprensionDetalle } : null
       })], { type: "application/json" });
       const { error: eRaw } = await sb.storage.from("audios")
-        .upload(usuarioActual.id + "/" + sesionId + ".raw.json", raw, { contentType: "application/json" });
-      if (eRaw) console.error("Error subiendo el crudo del motor (la sesión se guarda sin él):", eRaw);
+        .upload(usuarioActual.id + "/" + g.sesionId + ".raw.json", raw, { contentType: "application/json" });
+      if (eRaw && !esDuplicado(eRaw)) { console.error("Error subiendo el crudo del motor:", eRaw); return false; }
     }
+    g.rawOk = true;
 
-    // 2. Guardar la sesión ligada al alumno real
-    const { error } = await sb.from("sesiones").insert({
-      id:                sesionId,
-      user_id:           usuarioActual.id,
-      alumno_id:         alumnoId,
-      alumno_nombre:     alumnoGuardado,
-      texto_id:          lecturaActual.id,
-      texto_titulo:      lecturaActual.titulo,
-      curso:             cursoAlumno,
-      ppm:               m.ppm,
-      precision:         m.precision,
-      fluency:           m.fluency,
-      prosody:           m.prosody,
-      omisiones:         m.omisiones,
-      sustituciones:     m.sustituciones,
-      adiciones:         m.adiciones,
-      inversiones:       m.inversiones,
-      repeticiones:      m.repeticiones,
-      rectificaciones:   m.rectificaciones,
-      vacilaciones:      m.vacilaciones,
-      pausas_largas:     m.pausasLargas,
-      duracion_segundos: segundos,
-      audio_path:        audioPath,
-      comprension_aciertos: comprensionAciertos,
-      comprension_total:    comprensionTotal,
-      fecha:             new Date().toISOString()
-    });
-    if (error) { console.error("Supabase error:", error); errorGuardado(); return; }
-
-    // 3. Guardar el detalle palabra a palabra (lo que revisará el docente)
-    if (detallePalabras && detallePalabras.length > 0) {
-      const filas = detallePalabras.map(p => ({ ...p, sesion_id: sesionId, user_id: usuarioActual.id }));
-      const { error: eDet } = await sb.from("sesion_palabras").insert(filas);
-      if (eDet) console.error("Error guardando el detalle de palabras:", eDet);
+    // 2b. Anotar el resultado del test de comprensión en la sesión
+    if (!g.compOk && comprensionTotal != null) {
+      const { error: eComp } = await sb.from("sesiones")
+        .update({ comprension_aciertos: comprensionAciertos, comprension_total: comprensionTotal })
+        .eq("id", g.sesionId);
+      if (eComp) { console.error("Error guardando la comprensión:", eComp); return false; }
     }
-
-    const ses = JSON.parse(localStorage.getItem("sesiones_" + alumnoGuardado) || "[]");
-    ses.push({ texto_id: lecturaActual.id });
-    localStorage.setItem("sesiones_" + alumnoGuardado, JSON.stringify(ses));
-
-    // Sesión guardada: habilitamos el paso a la verificación docente
-    ultimaSesionId = sesionId;
-    document.getElementById("overlay-sub").textContent = "Lectura guardada correctamente.";
-    document.getElementById("verificar-btn").disabled  = false;
+    g.compOk = true;
+    return true;
   } catch (e) {
-    console.error("Error guardando sesión:", e);
-    errorGuardado();
+    console.error("Error completando el guardado:", e);
+    return false;
   }
+}
+
+// Espera el guardado crítico (que arrancó antes del quiz), añade el complemento
+// y refleja el resultado en el overlay. Si algo falló, ofrece reintentar.
+async function finalizarGuardado() {
+  document.getElementById("overlay-sub").textContent  = "Guardando la lectura…";
+  document.getElementById("reintentar-btn").style.display = "none";
+
+  const ok = (await guardado.promesa) && (await guardarComplemento());
+  if (!ok) { errorGuardado(); return; }
+
+  // Marcar la lectura como hecha SOLO si se guardó bien y se leyó algo:
+  // una sesión fallida (sin palabras) no debe hacer avanzar al alumno.
+  if (guardado.m.leidas > 0) {
+    const ses = JSON.parse(localStorage.getItem("sesiones_" + alumnoGuardado) || "[]");
+    if (!ses.some(s => s.texto_id === lecturaActual.id)) {
+      ses.push({ texto_id: lecturaActual.id });
+      localStorage.setItem("sesiones_" + alumnoGuardado, JSON.stringify(ses));
+    }
+  }
+
+  // Sesión guardada: habilitamos el paso a la verificación docente
+  ultimaSesionId = guardado.sesionId;
+  document.getElementById("overlay-sub").textContent = "Lectura guardada correctamente.";
+  document.getElementById("verificar-btn").disabled  = false;
+}
+
+function reintentarGuardado() {
+  guardado.promesa = guardarCritico();   // retoma solo los pasos que faltan
+  finalizarGuardado();
 }
 
 function errorGuardado() {
   const sub = document.getElementById("overlay-sub");
-  if (sub) sub.textContent = "No se pudo guardar la lectura. Revisa la conexión e inténtalo de nuevo.";
+  if (sub) sub.textContent = "No se pudo guardar la lectura. Comprueba la conexión y pulsa «Reintentar guardado»: los datos siguen aquí.";
+  document.getElementById("reintentar-btn").style.display = "block";
 }
 
 // El alumno no ve datos; estos botones son para el docente al terminar
